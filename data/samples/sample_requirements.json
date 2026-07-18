@@ -1,0 +1,29 @@
+{
+  "_comment": "サンプル機体データ(VALIDATION_PLAN.md RC-1 と同一)。API_SPEC.md の PUT /api/projects/{id}/requirements にそのまま使用可",
+  "project": {
+    "team_name": "CIT鳥人間(サンプル)",
+    "aircraft_name": "PBM-Sample-01",
+    "design_year": 2026,
+    "category": "distance",
+    "design_lead": "サンプル設計者",
+    "unit_system": "SI",
+    "version": "v0.1",
+    "design_goal": "初期サイジングの検証用サンプル"
+  },
+  "requirements": {
+    "pilot_mass": { "value": 60, "unit": "kg" },
+    "airframe_mass_target": { "value": 40, "unit": "kg" },
+    "pilot_power_sustained": { "value": 250, "unit": "W" },
+    "pilot_power_max": { "value": 400, "unit": "W" },
+    "target_cruise_speed": { "value": 7.5, "unit": "m/s" },
+    "target_distance": { "value": 1000, "unit": "m" },
+    "wingspan_limit": { "value": 30, "unit": "m" },
+    "air_density": { "value": 1.225, "unit": "kg/m^3" },
+    "cl_cruise": 1.0,
+    "cl_max": 1.4,
+    "cd0": 0.02,
+    "oswald_efficiency": 0.9,
+    "propeller_efficiency": 0.8,
+    "drivetrain_efficiency": 0.95
+  }
+}

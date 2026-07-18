@@ -1,0 +1,144 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+  margin: 0;
+  color: #1a1a2e;
+  background: #f7f9fb;
+  line-height: 1.6;
+}
+
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+h1 {
+  border-bottom: 3px solid #16537e;
+  padding-bottom: 0.3rem;
+}
+
+h2 {
+  border-left: 6px solid #16537e;
+  padding-left: 0.5rem;
+  margin-top: 2rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5rem 0 1rem;
+  background: #fff;
+}
+
+th,
+td {
+  border: 1px solid #ccd4dc;
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+th {
+  background: #eef3f8;
+}
+
+label {
+  display: block;
+  font-size: 0.9rem;
+  margin-top: 0.6rem;
+}
+
+input,
+select {
+  padding: 0.3rem 0.4rem;
+  font-size: 0.95rem;
+  border: 1px solid #aab4be;
+  border-radius: 4px;
+}
+
+button {
+  background: #16537e;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1.2rem;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 1rem;
+}
+
+button:disabled {
+  background: #9ab;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #a12622;
+  background: #fdecea;
+  border: 1px solid #e6b0aa;
+  padding: 0.6rem;
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.6rem;
+  border-radius: 1rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.badge.analytical_estimate {
+  background: #fff3cd;
+  color: #7a5b00;
+}
+
+.badge.draft {
+  background: #e2e3e5;
+  color: #41464b;
+}
+
+.badge.calculated {
+  background: #d4edda;
+  color: #155724;
+}
+
+.warn-violation {
+  background: #f8d7da;
+}
+
+.warn-warning {
+  background: #fff3cd;
+}
+
+.warn-info {
+  background: #d1ecf1;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #d7dee5;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin: 1rem 0;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.5rem;
+}
+
+a {
+  color: #16537e;
+}
+
+.note {
+  font-size: 0.85rem;
+  color: #555;
+}

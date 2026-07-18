@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pbm"
+version = "0.1.0"
+description = "Project BirdMan - 人力飛行機設計支援プラットフォーム"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.111",
+    "pydantic>=2.7",
+    "uvicorn[standard]>=0.30",
+    "SQLAlchemy>=2.0",
+    "Pint>=0.24",
+    "Jinja2>=3.1",
+]
+# NumPy/SciPy/Pandas は PROJECT_BRIEF §7 の基本構成だが、Phase 1 の計算は標準mathで
+# 完結するため未追加。翼幅方向分布・最適化(Phase 2/4)で必要になった時点で追加する。
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "ruff>=0.5",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# FastAPIの Depends(...) はデフォルト引数での関数呼び出しが標準イディオム
+"src/pbm/api/routes.py" = ["B008"]

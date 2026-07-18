@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>初期サイジングレポート — {{ project.aircraft_name }}</title>
+<style>
+  body { font-family: "Segoe UI", "Yu Gothic UI", sans-serif; margin: 2rem auto; max-width: 60rem; color: #1a1a2e; line-height: 1.6; }
+  h1 { border-bottom: 3px solid #16537e; padding-bottom: .3rem; }
+  h2 { border-left: 6px solid #16537e; padding-left: .5rem; margin-top: 2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .5rem 0 1rem; }
+  th, td { border: 1px solid #bbb; padding: .35rem .6rem; text-align: left; font-size: .95rem; }
+  th { background: #eef3f8; }
+  code { background: #f4f4f4; padding: .1rem .3rem; }
+  .badge { display: inline-block; padding: .15rem .6rem; border-radius: 1rem; font-weight: bold; font-size: .85rem; }
+  .badge.analytical_estimate { background: #fff3cd; color: #7a5b00; border: 1px solid #e0c060; }
+  .badge.real { background: #d4edda; color: #155724; }
+  .badge.mock { background: #f8d7da; color: #721c24; }
+  .badge.imported { background: #d1ecf1; color: #0c5460; }
+  .warn-violation { background: #f8d7da; }
+  .warn-warning { background: #fff3cd; }
+  .warn-info { background: #d1ecf1; }
+  .disclaimer { border: 2px solid #c0392b; background: #fdecea; padding: 1rem; margin-top: 2rem; }
+  .meta { color: #555; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>初期サイジングレポート</h1>
+<p class="meta">
+  チーム: {{ project.team_name }} / 機体: {{ project.aircraft_name }}({{ project.version }})
+  / 設計年度: {{ project.design_year }} / 部門: {{ project.category }} / 設計責任者: {{ project.design_lead }}<br>
+  プロジェクト状態: {{ project.status }} / 要求仕様リビジョン: {{ run.requirement_revision }}
+  / 実行ID: <code>{{ run.id }}</code> / 実行日時: {{ run.created_at.isoformat() }}
+</p>
+
+<h2>実行メタデータ</h2>
+<table>
+  <tr><th>実行モード</th><td>
+    <span class="badge {{ run.execution.execution_mode }}">{{ run.execution.execution_mode }}</span>
+    {% if run.execution.execution_mode == "analytical_estimate" %}
+    (理論式による解析的推定。外部解析ソフトは<strong>実行していません</strong>)
+    {% endif %}
+  </td></tr>
+  <tr><th>ソルバー</th><td>{{ run.execution.solver_name }} v{{ run.execution.solver_version }}</td></tr>
+  <tr><th>入力ハッシュ (SHA-256)</th><td><code>{{ run.execution.input_hash }}</code></td></tr>
+  <tr><th>開始 / 終了</th><td>{{ run.execution.started_at.isoformat() }} / {{ run.execution.finished_at.isoformat() }}</td></tr>
+  <tr><th>結果ステータス</th><td>{{ run.execution.result_status }}</td></tr>
+</table>
+
+<h2>入力値(要求仕様)</h2>
+<table>
+  <tr><th>項目</th><th>値</th><th>単位</th></tr>
+  <tr><td>パイロット質量</td><td>{{ inputs.pilot_mass.value }}</td><td>{{ inputs.pilot_mass.unit }}</td></tr>
+  <tr><td>機体質量目標</td><td>{{ inputs.airframe_mass_target.value }}</td><td>{{ inputs.airframe_mass_target.unit }}</td></tr>
+  <tr><td>パイロット持続出力</td><td>{{ inputs.pilot_power_sustained.value }}</td><td>{{ inputs.pilot_power_sustained.unit }}</td></tr>
+  {% if inputs.pilot_power_max %}<tr><td>パイロット最大出力</td><td>{{ inputs.pilot_power_max.value }}</td><td>{{ inputs.pilot_power_max.unit }}</td></tr>{% endif %}
+  <tr><td>目標巡航速度</td><td>{{ inputs.target_cruise_speed.value }}</td><td>{{ inputs.target_cruise_speed.unit }}</td></tr>
+  {% if inputs.target_distance %}<tr><td>目標飛行距離</td><td>{{ inputs.target_distance.value }}</td><td>{{ inputs.target_distance.unit }}</td></tr>{% endif %}
+  <tr><td>翼幅制限(設計翼幅)</td><td>{{ inputs.wingspan_limit.value }}</td><td>{{ inputs.wingspan_limit.unit }}</td></tr>
+  <tr><td>空気密度</td><td>{{ inputs.air_density.value }}</td><td>{{ inputs.air_density.unit }}</td></tr>
+  <tr><td>巡航揚力係数 CL_cruise</td><td>{{ inputs.cl_cruise }}</td><td>−</td></tr>
+  <tr><td>最大揚力係数 CL_max</td><td>{{ inputs.cl_max }}</td><td>−</td></tr>
+  <tr><td>有害抗力係数 CD0</td><td>{{ inputs.cd0 }}</td><td>−</td></tr>
+  <tr><td>オズワルド効率 e</td><td>{{ inputs.oswald_efficiency }}</td><td>−</td></tr>
+  <tr><td>プロペラ効率 η_prop</td><td>{{ inputs.propeller_efficiency }}</td><td>−</td></tr>
+  <tr><td>駆動系効率 η_drive</td><td>{{ inputs.drivetrain_efficiency }}</td><td>−</td></tr>
+</table>
+
+<h2>警告・制約判定</h2>
+{% if run.outputs.warnings %}
+<table>
+  <tr><th>コード</th><th>重要度</th><th>内容</th></tr>
+  {% for w in run.outputs.warnings %}
+  <tr class="warn-{{ w.severity }}"><td>{{ w.code }}</td><td>{{ w.severity }}</td><td>{{ w.message }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>警告はありません(すべて推奨範囲内)。</p>
+{% endif %}
+
+<h2>計算結果(SI単位・有効4桁)</h2>
+<table>
+  <tr><th>項目</th><th>値</th><th>単位</th></tr>
+  {% for r in results %}
+  <tr><td>{{ r.label }}</td><td>{{ sig4(r.quantity.value) }}</td><td>{{ r.quantity.unit }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>使用した計算式</h2>
+<table>
+  <tr><th>#</th><th>記号</th><th>名称</th><th>式</th><th>代入値</th><th>結果</th><th>出典・根拠</th></tr>
+  {% for f in run.outputs.formulas %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td>{{ f.symbol }}</td>
+    <td>{{ f.name }}</td>
+    <td><code>{{ f.expression }}</code></td>
+    <td>{% for k, v in f.substitutions.items() %}{{ k }} = {{ v }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+    <td>{{ sig4(f.result.value) }} {{ f.result.unit }}</td>
+    <td>{{ f.source }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>使用した仮定</h2>
+<table>
+  <tr><th>ID</th><th>項目</th><th>値</th><th>根拠・注意</th></tr>
+  {% for a in run.outputs.assumptions %}
+  <tr><td>{{ a.id }}</td><td>{{ a.name }}</td><td>{{ a.value }}</td><td>{{ a.rationale }}</td></tr>
+  {% endfor %}
+</table>
+
+<h2>適用範囲</h2>
+<ul>
+  <li>定常・等速・水平飛行のみを対象とする。旋回・離陸・突風応答は含まない</li>
+  <li>CD0・オズワルド効率・プロペラ効率・駆動系効率は推定値であり、詳細解析(XFLR5 / XROTOR)・実測で更新が必要</li>
+  <li>翼幅制限値を設計翼幅として使用している(A-101)。テーパー・ねじりの影響は含まない</li>
+</ul>
+
+<div class="disclaimer">
+  <strong>免責事項:</strong> 本レポートの結果は理論式による解析的推定(analytical_estimate)であり、
+  <strong>実機の飛行安全を保証するものではありません</strong>。
+  材料・安全率・製造方法・飛行試験の実施はチーム(人間)の承認により決定してください。
+</div>
+</body>
+</html>

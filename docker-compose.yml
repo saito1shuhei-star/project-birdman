@@ -1,0 +1,23 @@
+# PBM 開発用構成。実行検証は未実施(本環境にDocker未導入: TASKS T-112, ASSUMPTIONS A-204)
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      PBM_DATABASE_URL: sqlite:////app/data/pbm.sqlite3
+    volumes:
+      - pbm-data:/app/data
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # ブラウザから到達するAPIのURL(コンテナ間ではなくホスト経由)
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+    depends_on:
+      - backend
+
+volumes:
+  pbm-data:

@@ -1,0 +1,41 @@
+# CI: push/PR毎に lint + テスト + フロントエンドビルド。
+# GitHubリモート未設定のため初回実行は未検証(TASKS T-113)
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e "./backend[dev]"
+      - name: Lint (ruff)
+        run: ruff check backend
+      - name: Test (pytest)
+        run: python -m pytest backend/tests -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Build (type check込み)
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"

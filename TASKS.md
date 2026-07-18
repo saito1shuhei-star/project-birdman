@@ -9,7 +9,7 @@
 - [x] T-003 frontend骨格(Next.js + TypeScript)
 - [x] T-004 SQLite永続化(SQLAlchemy, create_all)
 - [~] T-005 docker-compose.yml と Dockerfile — **定義のみ。本環境にDocker未導入のため未実行検証(A-204)**
-- [~] T-006 GitHub Actions CI — **定義のみ。GitHubリモート未設定のため未実行検証**
+- [x] T-006 GitHub Actions CI(2026-07-19 初回実行成功。backend: ruff+pytest / frontend: build。T-113参照)
 - [x] T-007 サンプル機体データ(data/samples/)
 - [x] T-008 APIヘルスチェック
 - [x] T-009 git init と初期コミット
@@ -31,7 +31,7 @@
 - [x] T-110 **大会規則の正式値を反映**(2026-07-19、「鳥人間コンテストルールブック2025」全19頁確認・反映済み。部門区分を glider/human_powered_propeller に修正、翼幅制限は大会規則ではないことを訂正、風速5m/s・飛行制限高度10m等をASSUMPTIONS A-113/A-114・REQUIREMENTS §1.7に記録。安全率・強度は大会規則側に数値規定なしを確認)
 - [ ] T-111 過去機体1機分の実データでRC-1以外の妥当性確認(VALIDATION_PLAN §4)— ユーザー確認済み: 現時点では実測データなし。データ入手後に着手
 - [ ] T-112 docker compose up の実機検証(Docker導入後)← T-005
-- [ ] T-113 GitHubリモート作成とCI初回実行 ← T-006
+- [x] T-113 GitHubリモート作成とCI初回実行(2026-07-19。公開リポジトリ https://github.com/saito1shuhei-star/project-birdman を作成しpush。CI初回実行success(34秒)。以後、push毎にruff+pytest+frontend buildが自動実行される)
 - [ ] T-114 フロントエンドの要求仕様フォームに全項目の単位選択UI(現状は代表単位固定)
 - [ ] T-115 requirements/historyの差分表示(FR-013後半)
 

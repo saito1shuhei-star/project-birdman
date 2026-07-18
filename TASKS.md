@@ -41,7 +41,8 @@
 - [x] T-201 Alembic導入(2026-07-19。backend/alembic/、ベースラインリビジョン8b9ce2ae4e20。db.pyのcreate_allは開発利便性のため継続、Phase2以降のスキーマ変更はマイグレーション経由に。スモークテスト追加)
 - [~] T-202 XFLR5アダプター mock先行分(2026-07-19。`pbm.adapters.xflr5.XFLR5Adapter`、`pbm.calculation.aero_mock_polar`(有限翼揚力線理論の近似ポーラ、数値回帰テスト付き)、`is_available()`でPBM_XFLR5_PATH検査。**real実行連携・API/UI結線・WingPlanform結合は未実装**(下記T-202b/T-203/T-204で継続)
 - [ ] T-202b XFLR5 real実行連携(実際のXFLR5起動・結果パース)。実機XFLR5での検証が必要 ← T-202
-- [ ] T-203 XROTORアダプター(同様にmock先行)
+- [~] T-203 XROTORアダプター mock先行分(2026-07-19。`pbm.adapters.xrotor.XROTORAdapter`、`pbm.calculation.prop_mock_momentum`(運動量理論=理論上限、手計算リファレンスRC-P1・Froude恒等式・エネルギー収支テスト付き)。**real実行連携は未実装**(T-203b)
+- [ ] T-203b XROTOR real実行連携(実際のXROTOR起動・結果パース)。実機XROTORでの検証が必要 ← T-203
 - [ ] T-204 WingPlanformモデルとUI、XFLR5解析のAPI/UI結線(Step 5画面)← T-202
 - [ ] T-205 解析ジョブ管理(非同期化)
 - [ ] T-206 Playwright導入(T-108)

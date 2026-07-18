@@ -7,6 +7,11 @@
 - **条文番号の誤記を訂正**: 飛行制限高度10mの出典を「大会規約1条b」→「**3条b**」へ修正(A-114)。プラットホーム標準数値は2条、飛行準備制限5分は1条e
 - ルールブック内部の不整合を発見・記録: 規約3条e罰則2項が「飛行禁止区域7」を参照するが列挙は1〜6のみ(事務局確認事項として記録)
 
+### Added — T-203 XROTORアダプター(mock先行分)
+
+- `PropellerSolverAdapter`の具象`XROTORAdapter`と`pbm.calculation.prop_mock_momentum`(作動円板運動量理論)を実装。`execution_mode=mock`は理論上限の理想性能(推力・誘導速度・Froude効率・円板荷重)を返し、**理論上限である旨を常に警告に付与**(MOCK_IDEAL_EFFICIENCY)。realモードはXFLR5と同様に未接続/未実装を明示的にエラー(CON-003)。手計算リファレンスRC-P1(V=7.5m/s, D=3m, P=250W → T≈32.30N, η≈0.9689)、Froude恒等式η=V/(V+v_i)、エネルギー収支T·w=Pの検証テスト25件を追加(全122件)
+- ASSUMPTIONS A-120(作動円板近似はモック専用・理論上限)
+
 ### Added — 再検証で判明した設計関連規定の反映
 
 - [docs/CONTEST_RULES_2025_NOTES.md](docs/CONTEST_RULES_2025_NOTES.md) を新設(全条文の設計関連事実の要約、PBM反映状況マッピング、著作権注意)

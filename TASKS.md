@@ -28,8 +28,8 @@
 
 ## 未完了・次にやること(優先度順)
 
-- [ ] T-110 **大会規則の正式値を反映**(翼幅制限・部門区分。A-203/未決定事項)— 人間の作業
-- [ ] T-111 過去機体1機分の実データでRC-1以外の妥当性確認(VALIDATION_PLAN §4)— 人間+PBM
+- [x] T-110 **大会規則の正式値を反映**(2026-07-19、「鳥人間コンテストルールブック2025」全19頁確認・反映済み。部門区分を glider/human_powered_propeller に修正、翼幅制限は大会規則ではないことを訂正、風速5m/s・飛行制限高度10m等をASSUMPTIONS A-113/A-114・REQUIREMENTS §1.7に記録。安全率・強度は大会規則側に数値規定なしを確認)
+- [ ] T-111 過去機体1機分の実データでRC-1以外の妥当性確認(VALIDATION_PLAN §4)— ユーザー確認済み: 現時点では実測データなし。データ入手後に着手
 - [ ] T-112 docker compose up の実機検証(Docker導入後)← T-005
 - [ ] T-113 GitHubリモート作成とCI初回実行 ← T-006
 - [ ] T-114 フロントエンドの要求仕様フォームに全項目の単位選択UI(現状は代表単位固定)
@@ -37,10 +37,12 @@
 
 ## Phase 2 以降(ROADMAP.md参照)
 
-- [ ] T-201 Alembic導入(スキーマ変更開始前に必須)
-- [ ] T-202 XFLR5アダプター(mock先行 → real。is_available()でPBM_XFLR5_PATH検査)
-- [ ] T-203 XROTORアダプター(同上)
-- [ ] T-204 WingPlanformモデルとUI
+- [x] T-116 離陸条件・風速条件・パイロット年齢要件をRequirementSpecInputへ実装(2026-07-19。wind_speed_limit既定5m/s・flight_altitude_limit既定10m・pilot_age(任意、大会規則適合判定はしない)。現行の初期サイジング計算には未使用・記録とレポート表示のみ。テスト9件追加)
+- [x] T-201 Alembic導入(2026-07-19。backend/alembic/、ベースラインリビジョン8b9ce2ae4e20。db.pyのcreate_allは開発利便性のため継続、Phase2以降のスキーマ変更はマイグレーション経由に。スモークテスト追加)
+- [~] T-202 XFLR5アダプター mock先行分(2026-07-19。`pbm.adapters.xflr5.XFLR5Adapter`、`pbm.calculation.aero_mock_polar`(有限翼揚力線理論の近似ポーラ、数値回帰テスト付き)、`is_available()`でPBM_XFLR5_PATH検査。**real実行連携・API/UI結線・WingPlanform結合は未実装**(下記T-202b/T-203/T-204で継続)
+- [ ] T-202b XFLR5 real実行連携(実際のXFLR5起動・結果パース)。実機XFLR5での検証が必要 ← T-202
+- [ ] T-203 XROTORアダプター(同様にmock先行)
+- [ ] T-204 WingPlanformモデルとUI、XFLR5解析のAPI/UI結線(Step 5画面)← T-202
 - [ ] T-205 解析ジョブ管理(非同期化)
 - [ ] T-206 Playwright導入(T-108)
 - [ ] T-301 簡易梁モデル / T-302 質量台帳 / T-303 静安定余裕 / T-304 承認UI+監査ログ

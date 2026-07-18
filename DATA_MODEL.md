@@ -58,7 +58,12 @@
 
 ## マイグレーション
 
-Phase 0–1 は `Base.metadata.create_all`(新規作成のみ)。スキーマ変更が始まる Phase 2 で Alembic を導入する(TASKS.md T-201)。
+Alembic導入済み(2026-07-19、TASKS.md T-201)。`backend/alembic/`にベースラインリビジョン(`8b9ce2ae4e20`: projects/requirement_specs/sizing_runs)を配置。
+
+- 接続先は`pbm.persistence.db.resolve_database_url()`と共通(`env.py`で解決。`PBM_DATABASE_URL`環境変数、未設定時は`backend/data/pbm.sqlite3`)
+- `pbm.persistence.db.create_engine_and_sessionmaker()`は開発・テストの利便性のため引き続き`Base.metadata.create_all()`を呼ぶ(冪等なので既存テーブルには影響しない)。**Phase 2以降でテーブル構造を変更する場合は、create_allに頼らずAlembicマイグレーション(`alembic revision --autogenerate`)を作成し、`alembic upgrade head`で適用すること**
+- テスト(`tests/test_alembic_migration.py`)で`alembic upgrade head`が空DBに現行スキーマを正しく作成できることを検証
+- 実行コマンド: `cd backend && alembic revision --autogenerate -m "<説明>"` → 生成内容を確認 → `alembic upgrade head`
 
 ## 再現性
 

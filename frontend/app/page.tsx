@@ -8,7 +8,7 @@ const EMPTY_FORM: ProjectCreate = {
   team_name: "",
   aircraft_name: "",
   design_year: new Date().getFullYear() + 1,
-  category: "distance",
+  category: "human_powered_propeller",
   design_lead: "",
   unit_system: "SI",
   version: "v0.1",
@@ -136,8 +136,10 @@ export default function HomePage() {
               value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value })}
             >
-              <option value="distance">滑空・距離(distance)</option>
-              <option value="time_trial">タイムトライアル(time_trial)</option>
+              <option value="glider">滑空機部門(glider)</option>
+              <option value="human_powered_propeller">
+                人力プロペラ機部門(human_powered_propeller)
+              </option>
               <option value="other">その他(other)</option>
             </select>
           </label>

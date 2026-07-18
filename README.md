@@ -26,6 +26,16 @@ python -m venv $env:USERPROFILE\.venvs\pbm
 # http://localhost:8000/docs でOpenAPI UI
 ```
 
+### データベースマイグレーション(Alembic)
+
+```powershell
+cd backend
+& $env:USERPROFILE\.venvs\pbm\Scripts\alembic upgrade head   # 既存DBを最新スキーマへ
+& $env:USERPROFILE\.venvs\pbm\Scripts\alembic revision --autogenerate -m "説明"  # スキーマ変更後に生成
+```
+
+`create_engine_and_sessionmaker()`は開発・テスト用に`create_all`も呼ぶため、初回起動は`alembic upgrade head`を省略しても動作するが、Phase 2以降のスキーマ変更はAlembicマイグレーション経由で行うこと(DATA_MODEL.md参照)。
+
 ### テスト・lint
 
 ```powershell

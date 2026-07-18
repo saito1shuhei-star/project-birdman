@@ -43,7 +43,7 @@ def sample_project_json() -> dict:
         "team_name": "CIT鳥人間",
         "aircraft_name": "PBM-01",
         "design_year": 2026,
-        "category": "distance",
+        "category": "human_powered_propeller",
         "design_lead": "テスト設計者",
         "version": "v0.1",
         "design_goal": "安定して1km",

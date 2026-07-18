@@ -34,6 +34,9 @@ export type RequirementSpec = {
   target_distance?: Quantity | null;
   wingspan_limit: Quantity;
   air_density: Quantity;
+  wind_speed_limit: Quantity;
+  flight_altitude_limit: Quantity;
+  pilot_age?: number | null;
   cl_cruise: number;
   cl_max: number;
   cd0: number;

@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from datetime import UTC, datetime
 
 import pbm
@@ -14,19 +12,11 @@ from pbm.adapters.base import ExecutionMode, ResultStatus, SolverExecution
 from pbm.calculation.initial_sizing import run_initial_sizing
 from pbm.domain.requirements import RequirementSpecInput
 from pbm.domain.results import SizingOutput
+from pbm.workflow.hashing import compute_input_hash
 
 SOLVER_NAME = "pbm.initial_sizing"
 
-
-def compute_input_hash(spec: RequirementSpecInput) -> str:
-    """正規化した入力JSONのSHA-256(FR-022, DATA_MODEL.md)。"""
-    canonical = json.dumps(
-        spec.model_dump(mode="json"),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+__all__ = ["compute_input_hash", "execute_sizing"]
 
 
 def execute_sizing(spec: RequirementSpecInput) -> tuple[SizingOutput, SolverExecution]:

@@ -23,7 +23,7 @@ Quantity
 | id | UUID(str) | |
 | team_name / aircraft_name | str | 必須 |
 | design_year | int | 例: 2026 |
-| category | enum: distance / time_trial / other | 部門(滑空機/人力プロペラ等は将来細分化) |
+| category | enum: glider / human_powered_propeller / other | 部門(「鳥人間コンテストルールブック2025」大会概要により確定。滑空機部門/人力プロペラ機部門。ASSUMPTIONS A-203) |
 | design_lead | str | 設計責任者 |
 | unit_system | enum: SI(将来拡張枠) | 表示単位系。内部は常にSI |
 | version | str | 機体設計バージョン |
@@ -45,8 +45,13 @@ Quantity
 | air_density | Quantity | [density] | 1(既定 1.225 kg/m³) |
 | cl_cruise / cl_max / cd0 / oswald_efficiency | float | 無次元 | 1(既定値=ASSUMPTIONS参照) |
 | propeller_efficiency / drivetrain_efficiency | float | 無次元 (0,1] | 1(既定値=ASSUMPTIONS参照) |
-| takeoff / turn / wind / materials / manufacturing / safety_factor / rules | — | — | 2–3 で追加 |
+| wind_speed_limit | Quantity | [speed] | 1(既定 5 m/s、A-113。記録のみ・初期サイジング未使用) |
+| flight_altitude_limit | Quantity | [length] | 1(既定 10 m、A-114。記録のみ・初期サイジング未使用) |
+| pilot_age | int? | 無次元(歳) | 1(任意・記録のみ。大会規則適合判定はPBMが行わない) |
+| turn / materials / manufacturing / safety_factor / rules | — | — | 2–3 で追加 |
 | revision | int | | 保存毎に+1 |
+
+`wind_speed_limit`/`flight_altitude_limit`はPROJECT_BRIEF Step 2の「離陸条件・風速条件」の一部として値を捕捉するが、CALCULATION_SPEC.mdの定常水平飛行モデルでは未使用(Phase 2–3の飛行包絡線・離陸解析で利用予定)。
 
 ### SizingRun — Step 3 の1回の実行
 

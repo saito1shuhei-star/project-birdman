@@ -9,10 +9,10 @@ from pbm.domain.states import DesignState
 
 
 class Category(StrEnum):
-    """大会部門。正式区分は要確認(ASSUMPTIONS A-203)。"""
+    """大会部門(ASSUMPTIONS A-203。出典: 鳥人間コンテストルールブック2025)。"""
 
-    distance = "distance"
-    time_trial = "time_trial"
+    glider = "glider"                                    # 滑空機部門
+    human_powered_propeller = "human_powered_propeller"  # 人力プロペラ機部門
     other = "other"
 
 
@@ -26,7 +26,7 @@ class ProjectCreate(BaseModel):
     team_name: str = Field(min_length=1, max_length=200)
     aircraft_name: str = Field(min_length=1, max_length=200)
     design_year: int = Field(ge=1977, le=2100)  # 第1回鳥人間コンテストは1977年
-    category: Category = Category.distance
+    category: Category = Category.human_powered_propeller
     design_lead: str = Field(min_length=1, max_length=200)
     unit_system: UnitSystem = UnitSystem.SI
     version: str = Field(default="v0.1", max_length=50)

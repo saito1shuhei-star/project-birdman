@@ -35,3 +35,15 @@ class MissingRequirementError(PBMError):
 
 class NotFoundError(PBMError):
     """対象エンティティが存在しない。"""
+
+
+class SolverUnavailableError(PBMError):
+    """realモードでの解析実行が要求されたが、外部ソルバーが利用不可(未インストール/パス未設定)。
+
+    モックへ黙って差し替えてはならない(CON-003)。呼び出し側が明示的にモックへ
+    切り替えるか、外部ソフトを設定するまでエラーとする。
+    """
+
+
+class SolverNotImplementedError(PBMError):
+    """realモードの実行経路が未実装。実解析を実行していないのに実行済みに見せない(CON-003)。"""

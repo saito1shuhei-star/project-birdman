@@ -36,6 +36,9 @@ OpenAPIドキュメント: `/docs`(自動生成)。
   "target_distance": {"value": 1000, "unit": "m"},
   "wingspan_limit": {"value": 30, "unit": "m"},
   "air_density": {"value": 1.225, "unit": "kg/m^3"},
+  "wind_speed_limit": {"value": 5.0, "unit": "m/s"},
+  "flight_altitude_limit": {"value": 10.0, "unit": "m"},
+  "pilot_age": 20,
   "cl_cruise": 1.0, "cl_max": 1.4, "cd0": 0.020, "oswald_efficiency": 0.90,
   "propeller_efficiency": 0.80, "drivetrain_efficiency": 0.95
 }
@@ -43,7 +46,8 @@ OpenAPIドキュメント: `/docs`(自動生成)。
 - 単位付き項目に素の数値を渡す → 422
 - 次元不一致("pilot_mass": {"value":1,"unit":"m"})→ 422
 - 範囲外(CALCULATION_SPEC §2)→ 422
-- 任意項目: pilot_power_max, target_distance。係数類は省略時ASSUMPTIONSの既定値
+- 任意項目: pilot_power_max, target_distance, pilot_age。係数類・wind_speed_limit・flight_altitude_limitは省略時ASSUMPTIONSの既定値(A-102〜A-107, A-113, A-114)
+- wingspan_limitは大会規則ではなくチーム独自の設計制約(FR-015)。wind_speed_limit/flight_altitude_limitは現行の初期サイジング計算には未使用(記録のみ、Phase 2–3で利用)。pilot_ageはPBMが大会規則適合判定を行うものではなく記録のみ(PROJECT_BRIEF §10)
 - 返却: 保存済み仕様 + `revision`, `id`, `created_at`
 
 `GET /api/projects/{project_id}/requirements` → 200 最新リビジョン / 404(未入力)

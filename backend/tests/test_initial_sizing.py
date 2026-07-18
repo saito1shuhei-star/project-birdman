@@ -161,3 +161,52 @@ class TestDefaults:
         assert out.quantities["wing_area"].value == pytest.approx(
             base.quantities["wing_area"].value, rel=1e-12
         )
+
+
+class TestTakeoffWindPilotFields:
+    """T-116: 離陸/風速条件・パイロット年齢(ASSUMPTIONS A-113, A-114)。"""
+
+    def test_defaults_match_contest_reference_values(self, rc1_spec):
+        assert rc1_spec.wind_speed_limit.to("m/s").value == pytest.approx(5.0)
+        assert rc1_spec.flight_altitude_limit.to("m").value == pytest.approx(10.0)
+        assert rc1_spec.pilot_age is None
+        assert not rc1_spec.user_specified("wind_speed_limit")
+
+    def test_pilot_age_optional_and_recorded(self):
+        spec = RequirementSpecInput.model_validate(RC1_JSON | {"pilot_age": 20})
+        assert spec.pilot_age == 20
+
+    def test_pilot_age_below_contest_minimum_not_rejected(self):
+        """PBMは大会規則への適合判定を行わない(PROJECT_BRIEF §10)。17歳でも拒否しない。"""
+        spec = RequirementSpecInput.model_validate(RC1_JSON | {"pilot_age": 17})
+        assert spec.pilot_age == 17
+
+    @pytest.mark.parametrize("bad_age", [5, 150, -1])
+    def test_pilot_age_non_physical_rejected(self, bad_age):
+        with pytest.raises(ValidationError):
+            RequirementSpecInput.model_validate(RC1_JSON | {"pilot_age": bad_age})
+
+    def test_wind_speed_limit_dimension_and_range(self):
+        with pytest.raises(ValidationError, match="次元が不正"):
+            RequirementSpecInput.model_validate(
+                RC1_JSON | {"wind_speed_limit": {"value": 5, "unit": "kg"}}
+            )
+        with pytest.raises(ValidationError):
+            RequirementSpecInput.model_validate(
+                RC1_JSON | {"wind_speed_limit": {"value": 100, "unit": "m/s"}}
+            )
+
+    def test_flight_altitude_limit_alternative_units(self):
+        spec = RequirementSpecInput.model_validate(
+            RC1_JSON | {"flight_altitude_limit": {"value": 1000, "unit": "cm"}}
+        )
+        assert spec.flight_altitude_limit.to("m").value == pytest.approx(10.0)
+
+    def test_not_used_in_sizing_output(self, rc1_spec):
+        """現行の定常水平飛行モデルはwind/altitude制限値を計算に用いない(記録のみ)。"""
+        out = run_initial_sizing(rc1_spec)
+        modified = RequirementSpecInput.model_validate(
+            RC1_JSON | {"wind_speed_limit": {"value": 8, "unit": "m/s"}}
+        )
+        out2 = run_initial_sizing(modified)
+        assert out.quantities == out2.quantities

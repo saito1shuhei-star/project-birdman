@@ -63,6 +63,8 @@ class TestVerticalSlice:
         assert "A-104" in html                        # 仮定ID
         assert "飛行安全を保証するものではありません" in html  # 免責(FR-032)
         assert "m^2" in html                          # 単位の明記
+        assert "風速条件の上限" in html                  # T-116: 大会規則由来の参考値
+        assert "5.0" in html and "10.0" in html        # 風速5m/s・飛行制限高度10m
 
     def test_rerun_is_reproducible(self, client, sample_project_json):
         """FR-022: 同一入力での再実行はinput_hashと数値が一致する。"""

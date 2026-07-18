@@ -62,6 +62,13 @@ class SolverAdapter(ABC):             # 共通基底
 class AerodynamicSolverAdapter(SolverAdapter): ...   # XFLR5(Phase 2)
 class PropellerSolverAdapter(SolverAdapter): ...     # XROTOR(Phase 2)
 class CADAdapter(ABC): ...                            # Fusion 360等(Phase 5)
+
+# XFLR5Adapter(pbm.adapters.xflr5, 2026-07-19実装, TASKS T-202): mock先行実装。
+# is_available()はPBM_XFLR5_PATHの実在確認のみ。execution_mode=mockは有限翼揚力線理論
+# による近似ポーラ(pbm.calculation.aero_mock_polar)を返す。realモードは要求されると
+# 未接続時SolverUnavailableError、接続時でも実行連携コード自体が未実装のため
+# SolverNotImplementedErrorを送出する(CON-003: 未実行を実行済みに見せない)。
+# API/UIへの結線(Step5画面)とWingPlanformモデル(T-204)は未着手。
 class ReportExporter(ABC): export(result) -> Path     # HTML(Phase 1)/PDF/CSV(Phase 5)
 ```
 

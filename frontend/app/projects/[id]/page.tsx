@@ -22,6 +22,9 @@ type ReqForm = {
   target_cruise_speed: QuantityForm;
   wingspan_limit: QuantityForm;
   air_density: QuantityForm;
+  wind_speed_limit: QuantityForm;
+  flight_altitude_limit: QuantityForm;
+  pilot_age: string;
   cl_cruise: string;
   cl_max: string;
   cd0: string;
@@ -37,6 +40,9 @@ const DEFAULT_FORM: ReqForm = {
   target_cruise_speed: { value: "7.5", unit: "m/s" },
   wingspan_limit: { value: "30", unit: "m" },
   air_density: { value: "1.225", unit: "kg/m^3" },
+  wind_speed_limit: { value: "5.0", unit: "m/s" },
+  flight_altitude_limit: { value: "10.0", unit: "m" },
+  pilot_age: "",
   cl_cruise: "1.0",
   cl_max: "1.4",
   cd0: "0.020",
@@ -147,6 +153,15 @@ export default function ProjectPage() {
               value: String(s.air_density.value),
               unit: s.air_density.unit,
             },
+            wind_speed_limit: {
+              value: String(s.wind_speed_limit.value),
+              unit: s.wind_speed_limit.unit,
+            },
+            flight_altitude_limit: {
+              value: String(s.flight_altitude_limit.value),
+              unit: s.flight_altitude_limit.unit,
+            },
+            pilot_age: s.pilot_age != null ? String(s.pilot_age) : "",
             cl_cruise: String(s.cl_cruise),
             cl_max: String(s.cl_max),
             cd0: String(s.cd0),
@@ -188,6 +203,15 @@ export default function ProjectPage() {
       value: Number(form.air_density.value),
       unit: form.air_density.unit,
     },
+    wind_speed_limit: {
+      value: Number(form.wind_speed_limit.value),
+      unit: form.wind_speed_limit.unit,
+    },
+    flight_altitude_limit: {
+      value: Number(form.flight_altitude_limit.value),
+      unit: form.flight_altitude_limit.unit,
+    },
+    pilot_age: form.pilot_age.trim() === "" ? null : Number(form.pilot_age),
     cl_cruise: Number(form.cl_cruise),
     cl_max: Number(form.cl_max),
     cd0: Number(form.cd0),
@@ -283,13 +307,38 @@ export default function ProjectPage() {
             ["m/s", "km/h"],
             (q) => setForm({ ...form, target_cruise_speed: q }),
           )}
-          {quantityField("翼幅制限", form.wingspan_limit, ["m", "mm"], (q) =>
-            setForm({ ...form, wingspan_limit: q }),
+          {quantityField(
+            "翼幅制限(※大会規則ではなくチーム独自の設計制約)",
+            form.wingspan_limit,
+            ["m", "mm"],
+            (q) => setForm({ ...form, wingspan_limit: q }),
           )}
           {quantityField("空気密度", form.air_density, ["kg/m^3"], (q) =>
             setForm({ ...form, air_density: q }),
           )}
+          {quantityField(
+            "風速条件の上限(参考: 大会規則の競技中断基準 5 m/s)",
+            form.wind_speed_limit,
+            ["m/s", "km/h"],
+            (q) => setForm({ ...form, wind_speed_limit: q }),
+          )}
+          {quantityField(
+            "飛行制限高度(参考: 大会規則 10 m)",
+            form.flight_altitude_limit,
+            ["m"],
+            (q) => setForm({ ...form, flight_altitude_limit: q }),
+          )}
         </div>
+        <label>
+          パイロット年齢(任意・記録のみ。大会規則の適合判定はチーム自身で行ってください)
+          <input
+            type="number"
+            min={10}
+            max={100}
+            value={form.pilot_age}
+            onChange={(e) => setForm({ ...form, pilot_age: e.target.value })}
+          />
+        </label>
         <p className="note">
           係数(無次元)— 既定値は仮定(ASSUMPTIONS.md A-102〜A-107)。根拠なく変更しないこと。
         </p>

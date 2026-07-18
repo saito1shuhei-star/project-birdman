@@ -2,8 +2,12 @@
 
 - 物理量はQuantity(値+単位)で受理し、次元と妥当範囲をここで検証する(FR-011, FR-012)
 - 無次元係数はfloat + 範囲制約(REQUIREMENTS FR-011 の明示的例外)
-- 既定値の根拠は ASSUMPTIONS.md(A-002, A-102〜A-107)
+- 既定値の根拠は ASSUMPTIONS.md(A-002, A-102〜A-107, A-113, A-114)
 - 妥当範囲の根拠は CALCULATION_SPEC.md §2 / ASSUMPTIONS A-110
+- wind_speed_limit/flight_altitude_limitは離陸・風速条件(Step 2)の一部として値のみ記録する。
+  現行の初期サイジング(CALCULATION_SPEC)は定常水平飛行モデルのため未使用(Phase 2–3で利用予定)
+- pilot_ageは大会規則(鳥人間コンテストルールブック2025)の年齢要件の参考記録。PBMは大会規則への
+  適合判定を行わない(PROJECT_BRIEF §10)ため、範囲外でも拒否・警告はせず値の妥当性検証のみ行う
 """
 
 from __future__ import annotations
@@ -22,6 +26,8 @@ _QUANTITY_CONSTRAINTS: dict[str, tuple[str, float | None, float | None]] = {
     "target_distance": ("[length]", 0.0, None),
     "wingspan_limit": ("[length]", 3.0, 45.0),
     "air_density": ("[mass] / [length] ** 3", 0.9, 1.4),
+    "wind_speed_limit": ("[length] / [time]", 0.5, 30.0),
+    "flight_altitude_limit": ("[length]", 1.0, 500.0),
 }
 
 
@@ -37,6 +43,12 @@ class RequirementSpecInput(BaseModel):
     wingspan_limit: Quantity
     # 既定値: ISA海面標準(A-002)
     air_density: Quantity = Quantity(value=1.225, unit="kg/m^3")
+    # 既定値: 大会規則の競技中断風速(A-113)。チーム独自の飛行判断基準として上書き可
+    wind_speed_limit: Quantity = Quantity(value=5.0, unit="m/s")
+    # 既定値: 大会規則の飛行制限高度=プラットホーム高さ(A-114)
+    flight_altitude_limit: Quantity = Quantity(value=10.0, unit="m")
+    # 参考記録のみ。大会規則の年齢要件(18歳以上)への適合判定はPBMが行わない
+    pilot_age: int | None = Field(default=None, ge=10, le=100)
 
     # 無次元係数。既定値の根拠は ASSUMPTIONS A-102〜A-107
     cl_cruise: float = Field(default=1.0, ge=0.1, le=2.5)

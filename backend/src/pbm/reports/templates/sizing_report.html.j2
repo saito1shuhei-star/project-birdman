@@ -55,8 +55,11 @@
   {% if inputs.pilot_power_max %}<tr><td>パイロット最大出力</td><td>{{ inputs.pilot_power_max.value }}</td><td>{{ inputs.pilot_power_max.unit }}</td></tr>{% endif %}
   <tr><td>目標巡航速度</td><td>{{ inputs.target_cruise_speed.value }}</td><td>{{ inputs.target_cruise_speed.unit }}</td></tr>
   {% if inputs.target_distance %}<tr><td>目標飛行距離</td><td>{{ inputs.target_distance.value }}</td><td>{{ inputs.target_distance.unit }}</td></tr>{% endif %}
-  <tr><td>翼幅制限(設計翼幅)</td><td>{{ inputs.wingspan_limit.value }}</td><td>{{ inputs.wingspan_limit.unit }}</td></tr>
+  <tr><td>翼幅制限(設計翼幅。※大会規則ではなくチーム独自の設計制約。FR-015)</td><td>{{ inputs.wingspan_limit.value }}</td><td>{{ inputs.wingspan_limit.unit }}</td></tr>
   <tr><td>空気密度</td><td>{{ inputs.air_density.value }}</td><td>{{ inputs.air_density.unit }}</td></tr>
+  <tr><td>風速条件の上限(参考: 大会規則の競技中断基準はA-113)</td><td>{{ inputs.wind_speed_limit.value }}</td><td>{{ inputs.wind_speed_limit.unit }}</td></tr>
+  <tr><td>飛行制限高度(参考: A-114)</td><td>{{ inputs.flight_altitude_limit.value }}</td><td>{{ inputs.flight_altitude_limit.unit }}</td></tr>
+  {% if inputs.pilot_age %}<tr><td>パイロット年齢(記録のみ。大会規則適合判定はPBMが行いません)</td><td>{{ inputs.pilot_age }}</td><td>歳</td></tr>{% endif %}
   <tr><td>巡航揚力係数 CL_cruise</td><td>{{ inputs.cl_cruise }}</td><td>−</td></tr>
   <tr><td>最大揚力係数 CL_max</td><td>{{ inputs.cl_max }}</td><td>−</td></tr>
   <tr><td>有害抗力係数 CD0</td><td>{{ inputs.cd0 }}</td><td>−</td></tr>

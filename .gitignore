@@ -19,6 +19,10 @@ frontend/out/
 next-env.d.ts
 *.tsbuildinfo
 
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+
 # 環境変数・秘密情報(NFR-008)
 .env
 .env.*

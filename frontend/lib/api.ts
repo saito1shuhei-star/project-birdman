@@ -153,6 +153,46 @@ export type AeroAnalysisRun = {
   created_at: string;
 };
 
+export type MassItem = {
+  id: string;
+  project_id: string;
+  name: string;
+  category: string;
+  mass: Quantity;
+  position_x: Quantity;
+  position_y: Quantity;
+  position_z: Quantity;
+  material: string;
+  source: "estimated" | "measured";
+  uncertainty?: Quantity | null;
+  owner: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MassProperties = {
+  quantities: Record<string, Quantity>;
+  breakdown: {
+    category: string;
+    mass: Quantity;
+    fraction: number;
+    item_count: number;
+  }[];
+  warnings: CalcWarning[];
+  estimated_item_count: number;
+  measured_item_count: number;
+};
+
+export type AnalysisRunLite = {
+  id: string;
+  outputs: {
+    quantities: Record<string, Quantity>;
+    warnings: CalcWarning[];
+  };
+  execution: SolverExecution;
+  created_at: string;
+};
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,

@@ -14,12 +14,14 @@ from sqlalchemy.orm import Session
 from pbm.adapters.base import SolverExecution
 from pbm.domain.entities import Project, ProjectCreate
 from pbm.domain.errors import NotFoundError
+from pbm.domain.mass_item import MassItem, MassItemInput
 from pbm.domain.planform import WingPlanformInput
 from pbm.domain.requirements import RequirementSpecInput
 from pbm.domain.results import SizingOutput, SizingRunResult
 from pbm.domain.states import DesignState
 from pbm.persistence.models import (
     AnalysisRunRow,
+    MassItemRow,
     ProjectRow,
     RequirementSpecRow,
     SizingRunRow,
@@ -264,15 +266,18 @@ def save_analysis_run(
     return row
 
 
-def list_analysis_runs(session: Session, project_id: str) -> list[AnalysisRunRow]:
+def list_analysis_runs(
+    session: Session, project_id: str, solver_name: str | None = None
+) -> list[AnalysisRunRow]:
     get_project_row(session, project_id)
-    return list(
-        session.scalars(
-            select(AnalysisRunRow)
-            .where(AnalysisRunRow.project_id == project_id)
-            .order_by(AnalysisRunRow.created_at.desc())
-        ).all()
+    stmt = (
+        select(AnalysisRunRow)
+        .where(AnalysisRunRow.project_id == project_id)
+        .order_by(AnalysisRunRow.created_at.desc())
     )
+    if solver_name is not None:
+        stmt = stmt.where(AnalysisRunRow.solver_name == solver_name)
+    return list(session.scalars(stmt).all())
 
 
 def get_analysis_run(session: Session, run_id: str) -> AnalysisRunRow:
@@ -280,3 +285,63 @@ def get_analysis_run(session: Session, run_id: str) -> AnalysisRunRow:
     if row is None:
         raise NotFoundError(f"解析実行が存在しません: {run_id}")
     return row
+
+
+# --- mass items(質量台帳。台帳的性質のため上書き更新を許可) ---
+
+
+def _mass_item_from_row(row: MassItemRow) -> MassItem:
+    return MassItem(
+        **MassItemInput.model_validate(row.payload).model_dump(),
+        id=row.id,
+        project_id=row.project_id,
+        created_at=datetime.fromisoformat(row.created_at),
+        updated_at=datetime.fromisoformat(row.updated_at),
+    )
+
+
+def create_mass_item(session: Session, project_id: str, item: MassItemInput) -> MassItem:
+    get_project_row(session, project_id)
+    now = _now_iso()
+    row = MassItemRow(
+        id=str(uuid.uuid4()),
+        project_id=project_id,
+        name=item.name,
+        category=item.category.value,
+        payload=item.model_dump(mode="json"),
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(row)
+    session.commit()
+    return _mass_item_from_row(row)
+
+
+def list_mass_items(session: Session, project_id: str) -> list[MassItem]:
+    get_project_row(session, project_id)
+    rows = session.scalars(
+        select(MassItemRow)
+        .where(MassItemRow.project_id == project_id)
+        .order_by(MassItemRow.created_at)
+    ).all()
+    return [_mass_item_from_row(r) for r in rows]
+
+
+def update_mass_item(session: Session, item_id: str, item: MassItemInput) -> MassItem:
+    row = session.get(MassItemRow, item_id)
+    if row is None:
+        raise NotFoundError(f"質量部品が存在しません: {item_id}")
+    row.name = item.name
+    row.category = item.category.value
+    row.payload = item.model_dump(mode="json")
+    row.updated_at = _now_iso()
+    session.commit()
+    return _mass_item_from_row(row)
+
+
+def delete_mass_item(session: Session, item_id: str) -> None:
+    row = session.get(MassItemRow, item_id)
+    if row is None:
+        raise NotFoundError(f"質量部品が存在しません: {item_id}")
+    session.delete(row)
+    session.commit()

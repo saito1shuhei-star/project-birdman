@@ -14,17 +14,19 @@ from __future__ import annotations
 
 import math
 
+from pbm.calculation.lifting_line import (
+    THIN_AIRFOIL_LIFT_SLOPE_PER_RAD,
+    finite_wing_lift_slope,
+)
 from pbm.domain.aero_analysis import AeroAnalysisOutput, AeroAnalysisRequest, AeroPolarPoint
 from pbm.domain.quantities import Quantity
 from pbm.domain.results import AssumptionRecord, CalcWarning, FormulaRecord, Severity
 
-_THIN_AIRFOIL_LIFT_SLOPE_PER_RAD = 2.0 * math.pi  # a0: 2D薄翼理論の揚力傾斜(出典: 上記)
-
 
 def generate_mock_polar(request: AeroAnalysisRequest) -> AeroAnalysisOutput:
     """有限翼揚力線理論による近似ポーラを生成する(モック。実XFLR5解析ではない)。"""
-    a0 = _THIN_AIRFOIL_LIFT_SLOPE_PER_RAD
-    lift_slope = a0 / (1.0 + a0 / (math.pi * request.aspect_ratio * request.oswald_efficiency))
+    a0 = THIN_AIRFOIL_LIFT_SLOPE_PER_RAD
+    lift_slope = finite_wing_lift_slope(request.aspect_ratio, request.oswald_efficiency)
 
     formulas = [
         FormulaRecord(

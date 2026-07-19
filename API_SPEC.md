@@ -120,6 +120,28 @@ OpenAPIドキュメント: `/docs`(自動生成)。
 `GET /api/projects/{project_id}/aero-analyses` → 200 リスト(降順)
 `GET /api/aero-analyses/{run_id}` → 200 / 404
 
+## 質量・重心台帳(Step 9、T-302)
+
+- `POST /api/projects/{id}/mass-items` → 201(name, category, mass, position_x/y/z, source(estimated/measured), owner等)
+- `GET /api/projects/{id}/mass-items` / `PUT /api/mass-items/{item_id}` / `DELETE /api/mass-items/{item_id}` → 204
+- `GET /api/projects/{id}/mass-properties` → 総質量・重心・慣性モーメント・カテゴリ内訳・目標差(要求仕様があれば)・警告。部品0件は409
+- カテゴリ: wing_structure / fuselage_structure / tail_structure / propulsion / cockpit / control / pilot / contest_equipment(A-116)/ other
+
+## 静安定(Step 7、T-303)
+
+- `POST /api/projects/{id}/stability-analyses`(body: horizontal_tail_area, tail_arm, wing_ac_position, tail_aspect_ratio ほか)→ 201
+  - 翼幾何=最新平面形、重心=質量台帳から自動取得(未入力は409)。導出文脈もrequestに保存
+  - 出力: V_H、揚力傾斜、dε/dα、中立点x_np、静安定余裕SM+警告(SM<0違反、0.05–0.20推奨)
+- `GET /api/projects/{id}/stability-analyses`
+
+## 主桁梁解析(Step 8、T-301)
+
+- `POST /api/projects/{id}/spar-analyses` → 201
+  - body: half_span, **load_factor(既定値なし)**, total_mass, lift_distribution(elliptic/uniform),
+    spar_outer_diameter, spar_wall_thickness, **elastic_modulus / allowable_stress / required_safety_factor(いずれも既定値なし=人間確定)**
+  - 出力: 翼根せん断/曲げ/応力、翼端たわみ、安全率、分布(最大21点)+警告(SF不足違反、たわみ比>0.1、薄肉座屈リスク)
+- `GET /api/projects/{id}/spar-analyses`
+
 ## 状態遷移(Phase 1はAPI最小限)
 
 `POST /api/projects/{project_id}/transition` → 200 / 409

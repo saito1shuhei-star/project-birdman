@@ -5,7 +5,11 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   AeroAnalysisRun,
+  AnalysisRunLite,
+  API_BASE,
   apiFetch,
+  MassItem,
+  MassProperties,
   Project,
   reportUrl,
   RequirementSpec,
@@ -110,6 +114,67 @@ const SPEC_FIELD_LABELS: Record<string, string> = {
   drivetrain_efficiency: "駆動系効率 η_drive",
 };
 
+const MASS_CATEGORIES: [string, string][] = [
+  ["wing_structure", "主翼構造"],
+  ["fuselage_structure", "胴体・フレーム"],
+  ["tail_structure", "尾翼"],
+  ["propulsion", "プロペラ・駆動系"],
+  ["cockpit", "コックピット"],
+  ["control", "操縦系統"],
+  ["pilot", "パイロット"],
+  ["contest_equipment", "大会搭載機材(カメラ等)"],
+  ["other", "その他"],
+];
+
+type MassItemForm = {
+  name: string;
+  category: string;
+  mass: string;
+  x: string;
+  y: string;
+  z: string;
+  source: string;
+  owner: string;
+};
+
+const EMPTY_MASS_ITEM: MassItemForm = {
+  name: "",
+  category: "wing_structure",
+  mass: "",
+  x: "0",
+  y: "0",
+  z: "0",
+  source: "estimated",
+  owner: "",
+};
+
+type StabilityForm = { st: string; lt: string; xac: string; art: string };
+const DEFAULT_STABILITY: StabilityForm = { st: "2.5", lt: "4", xac: "0.9", art: "8" };
+
+type SparForm = {
+  halfSpan: string;
+  loadFactor: string;
+  totalMass: string;
+  distribution: string;
+  d: string;
+  t: string;
+  e: string;
+  sigmaAllow: string;
+  requiredSf: string;
+};
+
+const DEFAULT_SPAR: SparForm = {
+  halfSpan: "15",
+  loadFactor: "",
+  totalMass: "100",
+  distribution: "elliptic",
+  d: "0.1",
+  t: "1",
+  e: "",
+  sigmaAllow: "",
+  requiredSf: "",
+};
+
 // リビジョン間の変更点を「項目: 旧 → 新」の文字列リストで返す(表示用。計算はしない)
 function specDiff(prev: RequirementSpec, curr: RequirementSpec): string[] {
   const fmt = (v: unknown): string => {
@@ -177,8 +242,35 @@ export default function ProjectPage() {
   const [latestAero, setLatestAero] = useState<AeroAnalysisRun | null>(null);
   const [history, setHistory] = useState<RequirementSpecOut[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [massItems, setMassItems] = useState<MassItem[]>([]);
+  const [massProps, setMassProps] = useState<MassProperties | null>(null);
+  const [newMassItem, setNewMassItem] = useState<MassItemForm>(EMPTY_MASS_ITEM);
+  const [stabilityForm, setStabilityForm] = useState<StabilityForm>(DEFAULT_STABILITY);
+  const [stabilityRun, setStabilityRun] = useState<AnalysisRunLite | null>(null);
+  const [sparForm, setSparForm] = useState<SparForm>(DEFAULT_SPAR);
+  const [sparRun, setSparRun] = useState<AnalysisRunLite | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const reloadMass = useCallback(async () => {
+    try {
+      const items = await apiFetch<MassItem[]>(
+        `/api/projects/${projectId}/mass-items`,
+      );
+      setMassItems(items);
+      if (items.length > 0) {
+        setMassProps(
+          await apiFetch<MassProperties>(
+            `/api/projects/${projectId}/mass-properties`,
+          ),
+        );
+      } else {
+        setMassProps(null);
+      }
+    } catch {
+      // 台帳未登録は無視
+    }
+  }, [projectId]);
 
   const reloadHistory = useCallback(async () => {
     try {
@@ -275,11 +367,111 @@ export default function ProjectPage() {
           // 解析履歴なしは無視
         }
         await reloadHistory();
+        await reloadMass();
       } catch (e) {
         setError(String(e));
       }
     })();
-  }, [projectId, reloadProject, reloadHistory]);
+  }, [projectId, reloadProject, reloadHistory, reloadMass]);
+
+  const addMassItem = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await apiFetch<MassItem>(`/api/projects/${projectId}/mass-items`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: newMassItem.name,
+          category: newMassItem.category,
+          mass: { value: Number(newMassItem.mass), unit: "kg" },
+          position_x: { value: Number(newMassItem.x), unit: "m" },
+          position_y: { value: Number(newMassItem.y), unit: "m" },
+          position_z: { value: Number(newMassItem.z), unit: "m" },
+          source: newMassItem.source,
+          owner: newMassItem.owner,
+        }),
+      });
+      setNewMassItem(EMPTY_MASS_ITEM);
+      await reloadMass();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeMassItem = async (itemId: string) => {
+    setBusy(true);
+    try {
+      await fetch(`${API_BASE}/api/mass-items/${itemId}`, { method: "DELETE" });
+      await reloadMass();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runStability = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const run = await apiFetch<AnalysisRunLite>(
+        `/api/projects/${projectId}/stability-analyses`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            horizontal_tail_area: {
+              value: Number(stabilityForm.st),
+              unit: "m^2",
+            },
+            tail_arm: { value: Number(stabilityForm.lt), unit: "m" },
+            wing_ac_position: { value: Number(stabilityForm.xac), unit: "m" },
+            tail_aspect_ratio: Number(stabilityForm.art),
+          }),
+        },
+      );
+      setStabilityRun(run);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runSpar = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const run = await apiFetch<AnalysisRunLite>(
+        `/api/projects/${projectId}/spar-analyses`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            half_span: { value: Number(sparForm.halfSpan), unit: "m" },
+            load_factor: Number(sparForm.loadFactor),
+            total_mass: { value: Number(sparForm.totalMass), unit: "kg" },
+            lift_distribution: sparForm.distribution,
+            spar_outer_diameter: { value: Number(sparForm.d), unit: "m" },
+            spar_wall_thickness: { value: Number(sparForm.t), unit: "mm" },
+            elastic_modulus: { value: Number(sparForm.e), unit: "GPa" },
+            allowable_stress: {
+              value: Number(sparForm.sigmaAllow),
+              unit: "MPa",
+            },
+            required_safety_factor: Number(sparForm.requiredSf),
+          }),
+        },
+      );
+      setSparRun(run);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const savePlanform = async () => {
     setBusy(true);
@@ -850,6 +1042,422 @@ export default function ProjectPage() {
           </table>
         </>
       )}
+
+      <h2>質量・重心台帳(Step 9)</h2>
+      <div className="card">
+        <p className="note">
+          座標系: 原点=機首先端、x=後方+、y=右+、z=上+(A-135)。点質量近似(A-136)。
+        </p>
+        {massItems.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>部品名</th>
+                <th>カテゴリ</th>
+                <th>質量</th>
+                <th>x / y / z [m]</th>
+                <th>出所</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {massItems.map((it) => (
+                <tr key={it.id}>
+                  <td>{it.name}</td>
+                  <td>
+                    {MASS_CATEGORIES.find(([v]) => v === it.category)?.[1] ??
+                      it.category}
+                  </td>
+                  <td>
+                    {it.mass.value} {it.mass.unit}
+                  </td>
+                  <td>
+                    {it.position_x.value} / {it.position_y.value} /{" "}
+                    {it.position_z.value}
+                  </td>
+                  <td>{it.source === "measured" ? "実測" : "推定"}</td>
+                  <td>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => removeMassItem(it.id)}
+                    >
+                      削除
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <form onSubmit={addMassItem}>
+          <div className="grid2">
+            <label>
+              部品名
+              <input
+                required
+                value={newMassItem.name}
+                onChange={(e) =>
+                  setNewMassItem({ ...newMassItem, name: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              カテゴリ
+              <select
+                value={newMassItem.category}
+                onChange={(e) =>
+                  setNewMassItem({ ...newMassItem, category: e.target.value })
+                }
+              >
+                {MASS_CATEGORIES.map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              質量 [kg]
+              <input
+                required
+                type="number"
+                step="any"
+                value={newMassItem.mass}
+                onChange={(e) =>
+                  setNewMassItem({ ...newMassItem, mass: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              出所
+              <select
+                value={newMassItem.source}
+                onChange={(e) =>
+                  setNewMassItem({ ...newMassItem, source: e.target.value })
+                }
+              >
+                <option value="estimated">推定値</option>
+                <option value="measured">実測値</option>
+              </select>
+            </label>
+            <label>
+              x [m](機首から後方+)
+              <input
+                type="number"
+                step="any"
+                value={newMassItem.x}
+                onChange={(e) =>
+                  setNewMassItem({ ...newMassItem, x: e.target.value })
+                }
+              />
+            </label>
+            <label>
+              z [m](上方+)
+              <input
+                type="number"
+                step="any"
+                value={newMassItem.z}
+                onChange={(e) =>
+                  setNewMassItem({ ...newMassItem, z: e.target.value })
+                }
+              />
+            </label>
+          </div>
+          <button type="submit" disabled={busy}>
+            部品を追加
+          </button>
+        </form>
+
+        {massProps && (
+          <>
+            <p className="note">
+              質量特性(推定 {massProps.estimated_item_count} 件 / 実測{" "}
+              {massProps.measured_item_count} 件):
+            </p>
+            {massProps.warnings.length > 0 && (
+              <table>
+                <tbody>
+                  {massProps.warnings.map((w) => (
+                    <tr key={w.code} className={`warn-${w.severity}`}>
+                      <td>{w.code}</td>
+                      <td>{w.message}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            <table>
+              <tbody>
+                {[
+                  ["total_mass", "総質量"],
+                  ["airframe_mass", "機体質量(パイロット除く)"],
+                  ["airframe_mass_target", "機体質量目標"],
+                  ["airframe_mass_delta", "目標との差"],
+                  ["cg_x", "重心 x"],
+                  ["cg_z", "重心 z"],
+                  ["inertia_yy", "ピッチ慣性 Iyy"],
+                ]
+                  .filter(([k]) => massProps.quantities[k])
+                  .map(([k, label]) => {
+                    const q = massProps.quantities[k];
+                    return (
+                      <tr key={k}>
+                        <td>{label}</td>
+                        <td>{sig4(q.value)}</td>
+                        <td>{q.unit}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
+
+      <h2>静安定(Step 7)</h2>
+      <div className="card">
+        <p className="note">
+          翼幾何は平面形(Step 4)、重心は質量台帳(Step 9)から取得します。
+          胴体・プロペラの寄与は含まない簡易推定です(A-131)。
+        </p>
+        <div className="grid2">
+          <label>
+            水平尾翼面積 S_t [m²]
+            <input
+              type="number"
+              step="any"
+              value={stabilityForm.st}
+              onChange={(e) =>
+                setStabilityForm({ ...stabilityForm, st: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            尾翼モーメントアーム l_t [m]
+            <input
+              type="number"
+              step="any"
+              value={stabilityForm.lt}
+              onChange={(e) =>
+                setStabilityForm({ ...stabilityForm, lt: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            主翼空力中心 x_ac [m](機首から)
+            <input
+              type="number"
+              step="any"
+              value={stabilityForm.xac}
+              onChange={(e) =>
+                setStabilityForm({ ...stabilityForm, xac: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            尾翼アスペクト比
+            <input
+              type="number"
+              step="any"
+              value={stabilityForm.art}
+              onChange={(e) =>
+                setStabilityForm({ ...stabilityForm, art: e.target.value })
+              }
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          disabled={busy || !planformOut || massItems.length === 0}
+          onClick={runStability}
+        >
+          静安定を計算
+        </button>
+        {stabilityRun && (
+          <>
+            <p className="note">
+              実行モード:{" "}
+              <span className={`badge ${stabilityRun.execution.execution_mode}`}>
+                {stabilityRun.execution.execution_mode}
+              </span>
+            </p>
+            {stabilityRun.outputs.warnings.map((w) => (
+              <p key={w.code} className={`warn-${w.severity}`}>
+                [{w.code}] {w.message}
+              </p>
+            ))}
+            <table>
+              <tbody>
+                {[
+                  ["tail_volume_horizontal", "水平尾翼容積 V_H"],
+                  ["neutral_point_x", "中立点 x_np"],
+                  ["cg_x", "重心 x_cg"],
+                  ["static_margin", "静安定余裕 SM"],
+                ].map(([k, label]) => {
+                  const q = stabilityRun.outputs.quantities[k];
+                  return (
+                    <tr key={k}>
+                      <td>{label}</td>
+                      <td>{sig4(q.value)}</td>
+                      <td>{q.unit === "dimensionless" ? "−" : q.unit}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
+
+      <h2>主桁の簡易梁解析(Step 8)</h2>
+      <form className="card" onSubmit={runSpar}>
+        <p className="note">
+          片持ち梁モデル(翼根固定・円管断面・自重軽減なし=安全側)。
+          <strong>
+            荷重倍数・材料定数・許容応力・要求安全率はチームが確定して入力してください(既定値なし)。
+          </strong>
+        </p>
+        <div className="grid2">
+          <label>
+            半翼幅 [m]
+            <input
+              type="number"
+              step="any"
+              value={sparForm.halfSpan}
+              onChange={(e) =>
+                setSparForm({ ...sparForm, halfSpan: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            荷重倍数 n(要チーム確定)
+            <input
+              required
+              type="number"
+              step="any"
+              value={sparForm.loadFactor}
+              onChange={(e) =>
+                setSparForm({ ...sparForm, loadFactor: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            全備質量 [kg]
+            <input
+              type="number"
+              step="any"
+              value={sparForm.totalMass}
+              onChange={(e) =>
+                setSparForm({ ...sparForm, totalMass: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            揚力分布
+            <select
+              value={sparForm.distribution}
+              onChange={(e) =>
+                setSparForm({ ...sparForm, distribution: e.target.value })
+              }
+            >
+              <option value="elliptic">楕円分布</option>
+              <option value="uniform">一様分布(保守側)</option>
+            </select>
+          </label>
+          <label>
+            桁外径 D [m]
+            <input
+              type="number"
+              step="any"
+              value={sparForm.d}
+              onChange={(e) => setSparForm({ ...sparForm, d: e.target.value })}
+            />
+          </label>
+          <label>
+            肉厚 t [mm]
+            <input
+              type="number"
+              step="any"
+              value={sparForm.t}
+              onChange={(e) => setSparForm({ ...sparForm, t: e.target.value })}
+            />
+          </label>
+          <label>
+            ヤング率 E [GPa](要チーム確定)
+            <input
+              required
+              type="number"
+              step="any"
+              value={sparForm.e}
+              onChange={(e) => setSparForm({ ...sparForm, e: e.target.value })}
+            />
+          </label>
+          <label>
+            許容応力 [MPa](要チーム確定)
+            <input
+              required
+              type="number"
+              step="any"
+              value={sparForm.sigmaAllow}
+              onChange={(e) =>
+                setSparForm({ ...sparForm, sigmaAllow: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            要求安全率(要チーム確定)
+            <input
+              required
+              type="number"
+              step="any"
+              value={sparForm.requiredSf}
+              onChange={(e) =>
+                setSparForm({ ...sparForm, requiredSf: e.target.value })
+              }
+            />
+          </label>
+        </div>
+        <button type="submit" disabled={busy}>
+          梁解析を実行
+        </button>
+        {sparRun && (
+          <>
+            <p className="note">
+              実行モード:{" "}
+              <span className={`badge ${sparRun.execution.execution_mode}`}>
+                {sparRun.execution.execution_mode}
+              </span>
+            </p>
+            {sparRun.outputs.warnings.map((w) => (
+              <p key={w.code} className={`warn-${w.severity}`}>
+                [{w.code}] {w.message}
+              </p>
+            ))}
+            <table>
+              <tbody>
+                {[
+                  ["root_shear", "翼根せん断力"],
+                  ["root_bending_moment", "翼根曲げモーメント"],
+                  ["root_bending_stress", "翼根曲げ応力"],
+                  ["tip_deflection", "翼端たわみ"],
+                  ["tip_deflection_ratio", "たわみ比 δ/s"],
+                  ["safety_factor", "安全率 SF"],
+                ].map(([k, label]) => {
+                  const q = sparRun.outputs.quantities[k];
+                  return (
+                    <tr key={k}>
+                      <td>{label}</td>
+                      <td>{sig4(q.value)}</td>
+                      <td>{q.unit === "dimensionless" ? "−" : q.unit}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </>
+        )}
+      </form>
     </>
   );
 }

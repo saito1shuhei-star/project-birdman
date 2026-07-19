@@ -23,7 +23,7 @@
 - [x] T-105 API(projects / requirements / sizing-runs / transition / 製造ガード)← T-102–104
 - [x] T-106 HTMLレポート(Jinja2、免責、execution_modeバッジ)← T-103
 - [x] T-107 テスト(単体・数値回帰RC-1・API統合・再現性)
-- [ ] T-108 Playwright E2E(Phase 2で導入)
+- [x] T-108 Playwright E2E(2026-07-19、T-206として実装完了)
 - [x] T-109 フロントエンド縦スライス(一覧/作成/要求入力/実行/結果/レポートリンク)← T-105
 
 ## 未完了・次にやること(優先度順)
@@ -45,7 +45,10 @@
 - [ ] T-203b XROTOR real実行連携(実際のXROTOR起動・結果パース)。実機XROTORでの検証が必要 ← T-203
 - [x] T-204 WingPlanformモデルとUI、XFLR5解析のAPI/UI結線(2026-07-19。WingPlanform(台形積分・手計算検証付き)、wing_planforms/analysis_runsテーブル+マイグレーション、PUT/GET planform・POST aero-analyses API(mock固定・状態calculated→analyzed遷移)、フロントエンドStep4/5セクション(平面形エディタ・導出量・ポーラ表・モック明示)。実ブラウザE2E確認済み。**過程でCategory enum変更のデータ移行漏れによる500エラーを発見し、データ移行`9706411a806d`+回帰テストで修正**)
 - [ ] T-205 解析ジョブ管理(非同期化)
-- [ ] T-206 Playwright導入(T-108)
-- [ ] T-301 簡易梁モデル / T-302 質量台帳 / T-303 静安定余裕 / T-304 承認UI+監査ログ
+- [x] T-206 Playwright導入(2026-07-19。@playwright/test+chromium、playwright.config.tsでbackend(uvicorn・一時DB)+frontend(next start)を自動起動、ゴールデンパスE2E(プロジェクト→要求→サイジング→平面形→空力→質量台帳→静安定→梁解析)合格。CIにe2eジョブ追加。T-108も完了)
+- [x] T-301 簡易梁モデル(2026-07-19。片持ち梁・円管断面・楕円/一様分布。せん断/曲げ/応力/たわみ/安全率。**荷重倍数・E・許容応力・要求安全率は人間入力必須(既定値なし)**。解析解リファレンスRC-B1・等分布たわみ解析解との一致テスト付き。座屈・ねじり・疲労は対象外)
+- [x] T-302 質量台帳(2026-07-19。MassItem CRUD+mass_itemsテーブル(マイグレーションbd57b817d300)+質量特性計算(総質量/重心/慣性/内訳/目標差、RC-M1手計算検証)。「大会搭載機材」カテゴリ(A-116)含む。UI実装済み)
+- [x] T-303 静安定余裕(2026-07-19。V_H/中立点/SM計算(RC-S1手計算検証)。翼幾何=平面形、重心=質量台帳から自動取得し、導出文脈もanalysis_runsに保存。SM 0.05–0.20推奨(A-133)。胴体・プロペラ寄与は含まない(A-131))
+- [ ] T-304 承認UI+監査ログ(approvalsテーブル)
 - [ ] T-401 最適化基盤 / T-402 パレート比較
 - [ ] T-501 CADパラメータ出力(approvedガード連動)/ T-502 PDF・CSVレポート

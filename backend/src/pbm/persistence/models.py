@@ -75,6 +75,22 @@ class WingPlanformRow(Base):
     created_at: Mapped[str] = mapped_column(String(40))
 
 
+class MassItemRow(Base):
+    """質量部品台帳(Step 9 / T-302)。1行=1部品。上書き更新可(台帳的性質)。"""
+
+    __tablename__ = "mass_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    category: Mapped[str] = mapped_column(String(50))
+    payload: Mapped[dict] = mapped_column(JSON)  # MassItemInput全体(値+単位)
+    created_at: Mapped[str] = mapped_column(String(40))
+    updated_at: Mapped[str] = mapped_column(String(40))
+
+
 class AnalysisRunRow(Base):
     """外部ソルバー(XFLR5/XROTOR等)による解析実行。mock/realはexecution内で区別。"""
 

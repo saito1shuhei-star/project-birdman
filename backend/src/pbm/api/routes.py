@@ -4,32 +4,41 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 import pbm
-from pbm.adapters.base import SolverExecution
+from pbm.adapters.base import ExecutionMode, ResultStatus, SolverExecution
 from pbm.api.schemas import (
     AeroAnalysisRunOut,
     HealthOut,
     RequirementSpecOut,
     SizingRunSummary,
+    SparRunOut,
+    StabilityRunOut,
     TransitionRequest,
     WingPlanformOut,
 )
+from pbm.calculation.mass_properties import MassPropertiesOutput, compute_mass_properties
+from pbm.calculation.spar_beam import run_spar_analysis
+from pbm.calculation.static_stability import compute_static_stability
 from pbm.domain.aero_analysis import AeroAnalysisOutput, AeroAnalysisRequest
 from pbm.domain.entities import Project, ProjectCreate
 from pbm.domain.errors import MissingRequirementError, NotFoundError
+from pbm.domain.mass_item import MassItem, MassItemInput
 from pbm.domain.planform import WingPlanformInput
 from pbm.domain.requirements import RequirementSpecInput
 from pbm.domain.results import SizingRunResult
+from pbm.domain.stability import StabilityOutput, StabilityRequest
 from pbm.domain.states import DesignState
+from pbm.domain.structure import SparAnalysisOutput, SparAnalysisRequest
 from pbm.persistence import repository
 from pbm.reports.html_report import render_sizing_report
 from pbm.workflow.aero_service import build_aero_request, execute_aero_analysis
+from pbm.workflow.hashing import compute_input_hash
 from pbm.workflow.sizing_service import execute_sizing
 from pbm.workflow.states import ensure_approved_for_manufacturing, validate_transition
 
@@ -271,12 +280,218 @@ def run_aero_analysis(
 def list_aero_analyses(
     project_id: str, session: Session = Depends(get_session)
 ) -> list[AeroAnalysisRunOut]:
-    return [_analysis_run_out(r) for r in repository.list_analysis_runs(session, project_id)]
+    runs = repository.list_analysis_runs(session, project_id, solver_name="XFLR5")
+    return [_analysis_run_out(r) for r in runs]
 
 
 @router.get("/aero-analyses/{run_id}", response_model=AeroAnalysisRunOut)
 def get_aero_analysis(run_id: str, session: Session = Depends(get_session)) -> AeroAnalysisRunOut:
-    return _analysis_run_out(repository.get_analysis_run(session, run_id))
+    row = repository.get_analysis_run(session, run_id)
+    if row.solver_name != "XFLR5":
+        raise NotFoundError(f"空力解析ではありません(solver={row.solver_name}): {run_id}")
+    return _analysis_run_out(row)
+
+
+# --- 質量・重心台帳(Step 9 / T-302) ---
+
+
+@router.post("/projects/{project_id}/mass-items", response_model=MassItem, status_code=201)
+def create_mass_item(
+    project_id: str, item: MassItemInput, session: Session = Depends(get_session)
+) -> MassItem:
+    return repository.create_mass_item(session, project_id, item)
+
+
+@router.get("/projects/{project_id}/mass-items", response_model=list[MassItem])
+def list_mass_items(project_id: str, session: Session = Depends(get_session)) -> list[MassItem]:
+    return repository.list_mass_items(session, project_id)
+
+
+@router.put("/mass-items/{item_id}", response_model=MassItem)
+def update_mass_item(
+    item_id: str, item: MassItemInput, session: Session = Depends(get_session)
+) -> MassItem:
+    return repository.update_mass_item(session, item_id, item)
+
+
+@router.delete("/mass-items/{item_id}", status_code=204)
+def delete_mass_item(item_id: str, session: Session = Depends(get_session)) -> None:
+    repository.delete_mass_item(session, item_id)
+
+
+@router.get("/projects/{project_id}/mass-properties", response_model=MassPropertiesOutput)
+def get_mass_properties(
+    project_id: str, session: Session = Depends(get_session)
+) -> MassPropertiesOutput:
+    """台帳から総質量・重心・慣性モーメント・内訳を計算する(オンデマンド)。"""
+    items = repository.list_mass_items(session, project_id)
+    if not items:
+        raise MissingRequirementError(
+            f"質量部品が未登録のため質量特性を計算できません: project={project_id}"
+        )
+    req_row = repository.latest_requirements_row(session, project_id)
+    target = None
+    if req_row is not None:
+        target = RequirementSpecInput.model_validate(req_row.payload).airframe_mass_target
+    return compute_mass_properties(list(items), airframe_mass_target=target)
+
+
+# --- 静安定(Step 7 / T-303) ---
+
+
+def _stability_run_out(row) -> StabilityRunOut:  # noqa: ANN001
+    return StabilityRunOut(
+        id=row.id,
+        project_id=row.project_id,
+        planform_revision=row.planform_revision,
+        requirement_revision=row.requirement_revision,
+        input_hash=row.input_hash,
+        request=row.request,
+        outputs=StabilityOutput.model_validate(row.outputs),
+        execution=SolverExecution.model_validate(row.execution),
+        created_at=datetime.fromisoformat(row.created_at),
+    )
+
+
+@router.post(
+    "/projects/{project_id}/stability-analyses",
+    response_model=StabilityRunOut,
+    status_code=201,
+)
+def run_stability_analysis(
+    project_id: str, request: StabilityRequest, session: Session = Depends(get_session)
+) -> StabilityRunOut:
+    """静安定余裕を計算する。翼幾何は平面形、重心は質量台帳から取得する。"""
+    repository.get_project(session, project_id)
+    planform_row = repository.latest_planform_row(session, project_id)
+    if planform_row is None:
+        raise MissingRequirementError(
+            f"主翼平面形が未入力のため静安定を計算できません: project={project_id}"
+        )
+    req_row = repository.latest_requirements_row(session, project_id)
+    if req_row is None:
+        raise MissingRequirementError(
+            f"要求仕様が未入力のため静安定を計算できません(オズワルド効率が必要): "
+            f"project={project_id}"
+        )
+    items = repository.list_mass_items(session, project_id)
+    if not items:
+        raise MissingRequirementError(
+            f"質量部品が未登録のため重心を計算できません: project={project_id}"
+        )
+
+    planform = WingPlanformInput.model_validate(planform_row.payload)
+    spec = RequirementSpecInput.model_validate(req_row.payload)
+    mass_props = compute_mass_properties(
+        list(items), airframe_mass_target=spec.airframe_mass_target
+    )
+    cg_x = mass_props.quantities["cg_x"].value
+
+    # トレーサビリティのため、リクエスト本体に加えて導出済みの文脈も保存・ハッシュ対象にする
+    context = {
+        "tail": request.model_dump(mode="json"),
+        "wing": {
+            "area_m2": planform.area_si,
+            "mean_chord_m": planform.mean_chord_si,
+            "aspect_ratio": planform.aspect_ratio,
+            "oswald_efficiency": spec.oswald_efficiency,
+        },
+        "cg_x_m": cg_x,
+    }
+    started_at = datetime.now(UTC)
+    outputs = compute_static_stability(
+        request,
+        wing_area_si=planform.area_si,
+        wing_mean_chord_si=planform.mean_chord_si,
+        wing_aspect_ratio=planform.aspect_ratio,
+        wing_oswald_efficiency=spec.oswald_efficiency,
+        cg_x_si=cg_x,
+    )
+    finished_at = datetime.now(UTC)
+    execution = SolverExecution(
+        solver_name="pbm.static_stability",
+        solver_version=pbm.__version__,
+        execution_mode=ExecutionMode.analytical_estimate,
+        input_hash=compute_input_hash(context),
+        started_at=started_at,
+        finished_at=finished_at,
+        result_status=ResultStatus.ok,
+    )
+    row = repository.save_analysis_run(
+        session,
+        project_id=project_id,
+        solver_name="pbm.static_stability",
+        planform_revision=planform_row.revision,
+        requirement_revision=req_row.revision,
+        request=context,
+        outputs=outputs.model_dump(mode="json"),
+        execution=execution,
+    )
+    return _stability_run_out(row)
+
+
+@router.get("/projects/{project_id}/stability-analyses", response_model=list[StabilityRunOut])
+def list_stability_analyses(
+    project_id: str, session: Session = Depends(get_session)
+) -> list[StabilityRunOut]:
+    runs = repository.list_analysis_runs(session, project_id, solver_name="pbm.static_stability")
+    return [_stability_run_out(r) for r in runs]
+
+
+# --- 構造: 主桁の簡易梁解析(Step 8 / T-301) ---
+
+
+def _spar_run_out(row) -> SparRunOut:  # noqa: ANN001
+    return SparRunOut(
+        id=row.id,
+        project_id=row.project_id,
+        input_hash=row.input_hash,
+        request=SparAnalysisRequest.model_validate(row.request),
+        outputs=SparAnalysisOutput.model_validate(row.outputs),
+        execution=SolverExecution.model_validate(row.execution),
+        created_at=datetime.fromisoformat(row.created_at),
+    )
+
+
+@router.post(
+    "/projects/{project_id}/spar-analyses", response_model=SparRunOut, status_code=201
+)
+def run_spar_analysis_endpoint(
+    project_id: str, request: SparAnalysisRequest, session: Session = Depends(get_session)
+) -> SparRunOut:
+    """主桁の簡易梁解析。荷重倍数・許容応力・要求安全率は人間が入力する(既定値なし)。"""
+    repository.get_project(session, project_id)
+    started_at = datetime.now(UTC)
+    outputs = run_spar_analysis(request)
+    finished_at = datetime.now(UTC)
+    execution = SolverExecution(
+        solver_name="pbm.spar_beam",
+        solver_version=pbm.__version__,
+        execution_mode=ExecutionMode.analytical_estimate,
+        input_hash=compute_input_hash(request),
+        started_at=started_at,
+        finished_at=finished_at,
+        result_status=ResultStatus.ok,
+    )
+    row = repository.save_analysis_run(
+        session,
+        project_id=project_id,
+        solver_name="pbm.spar_beam",
+        planform_revision=None,
+        requirement_revision=None,
+        request=request.model_dump(mode="json"),
+        outputs=outputs.model_dump(mode="json"),
+        execution=execution,
+    )
+    return _spar_run_out(row)
+
+
+@router.get("/projects/{project_id}/spar-analyses", response_model=list[SparRunOut])
+def list_spar_analyses(
+    project_id: str, session: Session = Depends(get_session)
+) -> list[SparRunOut]:
+    runs = repository.list_analysis_runs(session, project_id, solver_name="pbm.spar_beam")
+    return [_spar_run_out(r) for r in runs]
 
 
 # --- 状態遷移・製造ガード ---

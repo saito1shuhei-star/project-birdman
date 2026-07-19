@@ -115,7 +115,15 @@ DesignState = draft | calculated | analyzed | review_required | approved | rejec
 - **AnalysisRun**(persistence.analysis_runs): solver_name + planform/requirement revision + SolverExecution。
   mock/realはexecution_modeで機械的に区別(CON-003)
 
-## 5. Phase 3以降の拡張枠(モデルのみ予約、未実装)
+## 5. Phase 3 実装済みモデル(T-301〜T-303)
 
-- MassItem(Step 9): 部品質量・座標・推定/実測・不確かさ。「大会搭載機材」カテゴリを含む(A-116)
+- **MassItem**(mass_item.py): 部品名・カテゴリ(pilot/contest_equipment等9種)・質量・座標(A-135座標系)・
+  材料・推定/実測・不確かさ・担当者。点質量近似(A-136)
+- **MassPropertiesOutput**(calculation.mass_properties): 総質量・重心・慣性モーメント・内訳・目標差
+- **StabilityRequest/Output**(stability.py): 尾翼構成 → V_H・中立点・静安定余裕
+- **SparAnalysisRequest/Output**(structure.py): 主桁梁解析。荷重倍数・材料値・要求安全率は既定値なし(人間確定)
+
+## 6. 拡張枠(未実装)
+
 - KnowledgeEntry(§5): 設計判断・理由・判断者・日時
+- Approval(Phase 3後半): 承認監査ログ

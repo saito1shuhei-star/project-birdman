@@ -11,12 +11,11 @@ import json
 from pydantic import BaseModel
 
 
-def compute_input_hash(model: BaseModel) -> str:
-    """正規化(キーソート・区切り統一)した入力JSONのSHA-256 hexダイジェストを返す。"""
-    canonical = json.dumps(
-        model.model_dump(mode="json"),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
+def compute_input_hash(payload: BaseModel | dict) -> str:
+    """正規化(キーソート・区切り統一)した入力JSONのSHA-256 hexダイジェストを返す。
+
+    dictを渡す場合はJSONシリアライズ可能であること(解析コンテキストの複合入力用)。
+    """
+    data = payload.model_dump(mode="json") if isinstance(payload, BaseModel) else payload
+    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

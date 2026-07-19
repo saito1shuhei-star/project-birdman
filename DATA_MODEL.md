@@ -71,9 +71,21 @@
 | result_status | TEXT | 検索用複製 |
 | created_at | TEXT | |
 
+### mass_items(T-302で追加。マイグレーション`bd57b817d300`)
+
+| 列 | 型 | 制約 |
+|---|---|---|
+| id | TEXT(UUID) | PK |
+| project_id | TEXT | FK projects.id, ON DELETE CASCADE |
+| name / category | TEXT | 検索用に列化 |
+| payload | TEXT(JSON) | MassItemInput全体(質量・座標は値+単位) |
+| created_at / updated_at | TEXT | 台帳的性質のため上書き更新可(履歴主義の例外) |
+
+静安定(pbm.static_stability)・梁解析(pbm.spar_beam)の実行結果はanalysis_runsに保存し、
+`solver_name`でXFLR5等と区別する(一覧APIはソルバー別にフィルタ)。
+
 ### 将来テーブル(予約・未実装)
 
-- mass_items(Phase 3)
 - approvals(Phase 3: run_id, actor, action, comment, created_at — 承認監査ログ)
 - knowledge_entries(Phase 3+)
 

@@ -11,19 +11,25 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 import pbm
+from pbm.adapters.base import SolverExecution
 from pbm.api.schemas import (
+    AeroAnalysisRunOut,
     HealthOut,
     RequirementSpecOut,
     SizingRunSummary,
     TransitionRequest,
+    WingPlanformOut,
 )
+from pbm.domain.aero_analysis import AeroAnalysisOutput, AeroAnalysisRequest
 from pbm.domain.entities import Project, ProjectCreate
 from pbm.domain.errors import MissingRequirementError, NotFoundError
+from pbm.domain.planform import WingPlanformInput
 from pbm.domain.requirements import RequirementSpecInput
 from pbm.domain.results import SizingRunResult
 from pbm.domain.states import DesignState
 from pbm.persistence import repository
 from pbm.reports.html_report import render_sizing_report
+from pbm.workflow.aero_service import build_aero_request, execute_aero_analysis
 from pbm.workflow.sizing_service import execute_sizing
 from pbm.workflow.states import ensure_approved_for_manufacturing, validate_transition
 
@@ -167,6 +173,110 @@ def sizing_report(run_id: str, session: Session = Depends(get_session)) -> HTMLR
     project = repository.get_project(session, run.project_id)
     html = render_sizing_report(project, run)
     return HTMLResponse(content=html)
+
+
+# --- 主翼平面形(Step 4)・空力解析(Step 5) ---
+
+
+def _planform_out(row) -> WingPlanformOut:  # noqa: ANN001
+    planform = WingPlanformInput.model_validate(row.payload)
+    return WingPlanformOut(
+        id=row.id,
+        project_id=row.project_id,
+        revision=row.revision,
+        created_at=datetime.fromisoformat(row.created_at),
+        planform=planform,
+        derived=planform.derived_quantities(),
+    )
+
+
+@router.put("/projects/{project_id}/planform", response_model=WingPlanformOut)
+def put_planform(
+    project_id: str, planform: WingPlanformInput, session: Session = Depends(get_session)
+) -> WingPlanformOut:
+    repository.save_planform(session, project_id, planform)
+    row = repository.latest_planform_row(session, project_id)
+    assert row is not None  # 直前に保存済み
+    return _planform_out(row)
+
+
+@router.get("/projects/{project_id}/planform", response_model=WingPlanformOut)
+def get_planform(project_id: str, session: Session = Depends(get_session)) -> WingPlanformOut:
+    repository.get_project(session, project_id)
+    row = repository.latest_planform_row(session, project_id)
+    if row is None:
+        raise NotFoundError(f"主翼平面形が未入力です: project={project_id}")
+    return _planform_out(row)
+
+
+def _analysis_run_out(row) -> AeroAnalysisRunOut:  # noqa: ANN001
+    return AeroAnalysisRunOut(
+        id=row.id,
+        project_id=row.project_id,
+        solver_name=row.solver_name,
+        planform_revision=row.planform_revision,
+        requirement_revision=row.requirement_revision,
+        input_hash=row.input_hash,
+        request=AeroAnalysisRequest.model_validate(row.request),
+        outputs=AeroAnalysisOutput.model_validate(row.outputs),
+        execution=SolverExecution.model_validate(row.execution),
+        created_at=datetime.fromisoformat(row.created_at),
+    )
+
+
+@router.post(
+    "/projects/{project_id}/aero-analyses", response_model=AeroAnalysisRunOut, status_code=201
+)
+def run_aero_analysis(
+    project_id: str, session: Session = Depends(get_session)
+) -> AeroAnalysisRunOut:
+    """最新の平面形+要求仕様でモック空力解析を実行する(Step 5)。
+
+    現時点ではexecution_mode=mock固定(XFLR5 real連携はT-202b)。
+    モックである旨は結果のexecution.execution_modeで機械的に判別できる(CON-003)。
+    """
+    project = repository.get_project(session, project_id)
+    planform_row = repository.latest_planform_row(session, project_id)
+    if planform_row is None:
+        raise MissingRequirementError(
+            f"主翼平面形が未入力のため空力解析を実行できません: project={project_id}"
+        )
+    req_row = repository.latest_requirements_row(session, project_id)
+    if req_row is None:
+        raise MissingRequirementError(
+            f"要求仕様が未入力のため空力解析を実行できません(係数e/CD0/CL_maxが必要): "
+            f"project={project_id}"
+        )
+    planform = WingPlanformInput.model_validate(planform_row.payload)
+    spec = RequirementSpecInput.model_validate(req_row.payload)
+    request = build_aero_request(planform, spec)
+    outputs, execution = execute_aero_analysis(request)
+    row = repository.save_analysis_run(
+        session,
+        project_id=project_id,
+        solver_name=execution.solver_name,
+        planform_revision=planform_row.revision,
+        requirement_revision=req_row.revision,
+        request=request.model_dump(mode="json"),
+        outputs=outputs.model_dump(mode="json"),
+        execution=execution,
+    )
+    if project.status is DesignState.calculated:
+        validate_transition(DesignState.calculated, DesignState.analyzed)
+        repository.set_project_status(session, project_id, DesignState.analyzed)
+    return _analysis_run_out(row)
+
+
+@router.get("/projects/{project_id}/aero-analyses", response_model=list[AeroAnalysisRunOut])
+def list_aero_analyses(
+    project_id: str, session: Session = Depends(get_session)
+) -> list[AeroAnalysisRunOut]:
+    return [_analysis_run_out(r) for r in repository.list_analysis_runs(session, project_id)]
+
+
+@router.get("/aero-analyses/{run_id}", response_model=AeroAnalysisRunOut)
+def get_aero_analysis(run_id: str, session: Session = Depends(get_session)) -> AeroAnalysisRunOut:
+    return _analysis_run_out(repository.get_analysis_run(session, run_id))
 
 
 # --- 状態遷移・製造ガード ---

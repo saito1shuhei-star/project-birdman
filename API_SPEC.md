@@ -88,6 +88,38 @@ OpenAPIドキュメント: `/docs`(自動生成)。
 内容: プロジェクト情報、実行メタデータ(execution_modeバッジ)、入力(値+単位)、仮定、式(代入値つき)、
 結果(SI、有効4桁)、警告、適用範囲、免責(FR-032)。
 
+## 主翼平面形(Step 4、T-204)
+
+`PUT /api/projects/{project_id}/planform` → 200(revision+1で新規保存)
+```json
+{
+  "sections": [
+    {"spanwise_position": {"value": 0, "unit": "m"}, "chord": {"value": 1.2, "unit": "m"},
+     "twist_deg": 0, "airfoil": "DAE-11"},
+    {"spanwise_position": {"value": 15, "unit": "m"}, "chord": {"value": 0.6, "unit": "m"},
+     "twist_deg": -2, "airfoil": "DAE-11"}
+  ]
+}
+```
+- 左右対称翼の片翼(y昇順、先頭はy=0)。検証: 半翼幅1.5–22.5m、翼弦0.05–3.0m、ねじり±10度
+- 返却: `revision`, `planform`, `derived`(span/area/aspect_ratio/mean_chord/taper_ratio、台形積分)
+
+`GET /api/projects/{project_id}/planform` → 200 最新 / 404(未入力)
+
+## 空力解析(Step 5、T-204。現状はmock固定)
+
+`POST /api/projects/{project_id}/aero-analyses` → 201
+- 最新の平面形(AR・翼型名)+要求仕様(e/CD0/CL_max)からリクエストを組み立て、
+  XFLR5アダプターを実行。**現状はexecution_mode=mock固定**(揚力線理論の近似。
+  XFLR5 real連携はT-202b)。モックであることは`execution.execution_mode`で機械的に判別可能
+- 平面形または要求仕様が未入力 → 409
+- projectがcalculatedのとき analyzed へ遷移
+- 返却: `planform_revision`, `requirement_revision`, `input_hash`, `request`, `outputs`
+  (polar[α, CL, CD, Cm, stalled], max_lift_to_drag, warnings), `execution`
+
+`GET /api/projects/{project_id}/aero-analyses` → 200 リスト(降順)
+`GET /api/aero-analyses/{run_id}` → 200 / 404
+
 ## 状態遷移(Phase 1はAPI最小限)
 
 `POST /api/projects/{project_id}/transition` → 200 / 409

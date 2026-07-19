@@ -44,5 +44,5 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.ruff.lint.per-file-ignores]
 # FastAPIの Depends(...) はデフォルト引数での関数呼び出しが標準イディオム
 "src/pbm/api/routes.py" = ["B008"]
-# Alembicの自動生成マイグレーションはテンプレート由来のスタイル(Union表記等)。手編集しない
-"alembic/versions/*.py" = ["UP007", "UP035", "I001", "E501"]
+# Alembicの自動生成マイグレーションはテンプレート由来のスタイル(Union表記・sa未使用import等)
+"alembic/versions/*.py" = ["UP007", "UP035", "I001", "E501", "F401"]

@@ -7,6 +7,17 @@
 - **条文番号の誤記を訂正**: 飛行制限高度10mの出典を「大会規約1条b」→「**3条b**」へ修正(A-114)。プラットホーム標準数値は2条、飛行準備制限5分は1条e
 - ルールブック内部の不整合を発見・記録: 規約3条e罰則2項が「飛行禁止区域7」を参照するが列挙は1〜6のみ(事務局確認事項として記録)
 
+### Added — T-204 WingPlanform+空力解析API/UI結線
+
+- WingPlanformドメインモデル(左右対称・片翼セクション定義、台形積分による面積/AR/テーパー比導出、手計算リファレンステスト付き)
+- wing_planforms / analysis_runs テーブル+Alembicマイグレーション(`aedebbdef4cb`)
+- API: PUT/GET `/api/projects/{id}/planform`、POST/GET `/api/projects/{id}/aero-analyses`(XFLR5アダプターmock固定、planform/requirementリビジョンをトレース、状態calculated→analyzed遷移)
+- フロントエンド: Step 4平面形エディタ(セクション追加/削除・導出量表示)+Step 5解析結果(モック明示バッジ・(L/D)max・ポーラ表)。実ブラウザE2E確認済み
+
+### Fixed — Category enum変更のデータ移行漏れ(実DB 500エラー)
+
+- 2026-07-19の`Category` enum修正(distance→human_powered_propeller等)で既存DB行の移行を怠り、GET /api/projectsが500になる実バグをE2Eで発見。データ移行`9706411a806d`(distance→human_powered_propeller、time_trial→other)と回帰テストを追加。**教訓: enum値変更は必ずデータ移行とセットで行う**(DATA_MODEL.mdに記録)
+
 ### Added — T-203 XROTORアダプター(mock先行分)
 
 - `PropellerSolverAdapter`の具象`XROTORAdapter`と`pbm.calculation.prop_mock_momentum`(作動円板運動量理論)を実装。`execution_mode=mock`は理論上限の理想性能(推力・誘導速度・Froude効率・円板荷重)を返し、**理論上限である旨を常に警告に付与**(MOCK_IDEAL_EFFICIENCY)。realモードはXFLR5と同様に未接続/未実装を明示的にエラー(CON-003)。手計算リファレンスRC-P1(V=7.5m/s, D=3m, P=250W → T≈32.30N, η≈0.9689)、Froude恒等式η=V/(V+v_i)、エネルギー収支T·w=Pの検証テスト25件を追加(全122件)

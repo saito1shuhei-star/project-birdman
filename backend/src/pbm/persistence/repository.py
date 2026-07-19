@@ -1,6 +1,6 @@
 """リポジトリ: ドメインモデル ⇔ テーブル行の変換と永続化操作。
 
-履歴主義: サイジング実行・要求仕様は上書きせず常に追記する(DATA_MODEL.md)。
+履歴主義: サイジング実行・要求仕様・平面形・解析実行は上書きせず常に追記する(DATA_MODEL.md)。
 """
 
 from __future__ import annotations
@@ -14,10 +14,17 @@ from sqlalchemy.orm import Session
 from pbm.adapters.base import SolverExecution
 from pbm.domain.entities import Project, ProjectCreate
 from pbm.domain.errors import NotFoundError
+from pbm.domain.planform import WingPlanformInput
 from pbm.domain.requirements import RequirementSpecInput
 from pbm.domain.results import SizingOutput, SizingRunResult
 from pbm.domain.states import DesignState
-from pbm.persistence.models import ProjectRow, RequirementSpecRow, SizingRunRow
+from pbm.persistence.models import (
+    AnalysisRunRow,
+    ProjectRow,
+    RequirementSpecRow,
+    SizingRunRow,
+    WingPlanformRow,
+)
 
 
 def _now_iso() -> str:
@@ -192,3 +199,84 @@ def get_sizing_run(session: Session, run_id: str) -> SizingRunResult:
     if row is None:
         raise NotFoundError(f"サイジング実行が存在しません: {run_id}")
     return _sizing_run_from_row(row)
+
+
+# --- wing planforms ---
+
+
+def save_planform(
+    session: Session, project_id: str, planform: WingPlanformInput
+) -> tuple[str, int]:
+    """新しいリビジョンとして保存し、(id, revision) を返す。"""
+    get_project_row(session, project_id)
+    latest = latest_planform_row(session, project_id)
+    revision = (latest.revision + 1) if latest else 1
+    row = WingPlanformRow(
+        id=str(uuid.uuid4()),
+        project_id=project_id,
+        revision=revision,
+        payload=planform.model_dump(mode="json"),
+        created_at=_now_iso(),
+    )
+    session.add(row)
+    session.commit()
+    return row.id, revision
+
+
+def latest_planform_row(session: Session, project_id: str) -> WingPlanformRow | None:
+    return session.scalars(
+        select(WingPlanformRow)
+        .where(WingPlanformRow.project_id == project_id)
+        .order_by(WingPlanformRow.revision.desc())
+        .limit(1)
+    ).first()
+
+
+# --- analysis runs(XFLR5/XROTOR等) ---
+
+
+def save_analysis_run(
+    session: Session,
+    *,
+    project_id: str,
+    solver_name: str,
+    planform_revision: int | None,
+    requirement_revision: int | None,
+    request: dict,
+    outputs: dict,
+    execution: SolverExecution,
+) -> AnalysisRunRow:
+    row = AnalysisRunRow(
+        id=str(uuid.uuid4()),
+        project_id=project_id,
+        solver_name=solver_name,
+        planform_revision=planform_revision,
+        requirement_revision=requirement_revision,
+        input_hash=execution.input_hash,
+        request=request,
+        outputs=outputs,
+        execution=execution.model_dump(mode="json"),
+        result_status=execution.result_status.value,
+        created_at=_now_iso(),
+    )
+    session.add(row)
+    session.commit()
+    return row
+
+
+def list_analysis_runs(session: Session, project_id: str) -> list[AnalysisRunRow]:
+    get_project_row(session, project_id)
+    return list(
+        session.scalars(
+            select(AnalysisRunRow)
+            .where(AnalysisRunRow.project_id == project_id)
+            .order_by(AnalysisRunRow.created_at.desc())
+        ).all()
+    )
+
+
+def get_analysis_run(session: Session, run_id: str) -> AnalysisRunRow:
+    row = session.get(AnalysisRunRow, run_id)
+    if row is None:
+        raise NotFoundError(f"解析実行が存在しません: {run_id}")
+    return row

@@ -106,9 +106,16 @@ DesignState = draft | calculated | analyzed | review_required | approved | rejec
 - approved 以外で製造用データ生成 API を呼ぶと `ApprovalRequiredError`
 - approve/reject は actor(人名)必須
 
-## 4. Phase 2以降の拡張枠(モデルのみ予約、未実装)
+## 4. Phase 2 実装済みモデル(T-202〜T-204)
 
-- WingPlanform(Step 4): セクション列(位置、翼弦、翼型名、ねじり)
-- AnalysisRun(Step 5–6): SizingRunと同形式で solver=XFLR5/XROTOR
-- MassItem(Step 9): 部品質量・座標・推定/実測・不確かさ
+- **WingPlanform**(planform.py): WingSection(spanwise_position, chord, twist_deg, airfoil)の列。
+  左右対称・片翼定義(y昇順、先頭y=0)。導出量: span/area(台形積分)/aspect_ratio/mean_chord/taper_ratio
+- **AeroAnalysisRequest/Output**(aero_analysis.py): 空力解析の入出力(polar[α,CL,CD,Cm,stalled], (L/D)max)
+- **PropAnalysisRequest/Output**(prop_analysis.py): プロペラ解析の入出力(推力・誘導速度・Froude効率・円板荷重)
+- **AnalysisRun**(persistence.analysis_runs): solver_name + planform/requirement revision + SolverExecution。
+  mock/realはexecution_modeで機械的に区別(CON-003)
+
+## 5. Phase 3以降の拡張枠(モデルのみ予約、未実装)
+
+- MassItem(Step 9): 部品質量・座標・推定/実測・不確かさ。「大会搭載機材」カテゴリを含む(A-116)
 - KnowledgeEntry(§5): 設計判断・理由・判断者・日時

@@ -48,13 +48,41 @@
 | result_status | TEXT | ok/failed/partial(検索用に列にも複製) |
 | created_at | TEXT | |
 
+### wing_planforms(T-204で追加)
+
+| 列 | 型 | 制約 |
+|---|---|---|
+| id | TEXT(UUID) | PK |
+| project_id | TEXT | FK projects.id, ON DELETE CASCADE |
+| revision | INTEGER | UNIQUE(project_id, revision)。1始まり |
+| payload | TEXT(JSON) | WingPlanformInput(セクション列、値+単位) |
+| created_at | TEXT | |
+
+### analysis_runs(T-204で追加。XFLR5/XROTOR等の解析実行)
+
+| 列 | 型 | 制約 |
+|---|---|---|
+| id | TEXT(UUID) | PK |
+| project_id | TEXT | FK projects.id, ON DELETE CASCADE |
+| solver_name | TEXT | "XFLR5" / "XROTOR" 等 |
+| planform_revision / requirement_revision | INTEGER? | 入力の出所(トレーサビリティ) |
+| input_hash | TEXT | SHA-256。INDEX |
+| request / outputs / execution | TEXT(JSON) | リクエスト・結果・SolverExecution(mock/realはexecution内で区別) |
+| result_status | TEXT | 検索用複製 |
+| created_at | TEXT | |
+
 ### 将来テーブル(予約・未実装)
 
-- analysis_runs(Phase 2: XFLR5/XROTOR。sizing_runsと同構造 + solver列 + raw_output_path)
-- wing_planforms(Phase 2)
 - mass_items(Phase 3)
 - approvals(Phase 3: run_id, actor, action, comment, created_at — 承認監査ログ)
 - knowledge_entries(Phase 3+)
+
+### スキーマ・データ変更の教訓(2026-07-19)
+
+`Category` enumの値変更時に既存データの移行を怠り、実DBで500エラーが発生した
+(テストは毎回新規DBのため検出不可、実機E2Eで検出)。**enum値や検証仕様の変更は、
+必ずデータ移行(Alembic)とセットで行うこと。** リビジョン`9706411a806d`が該当移行。
+回帰テスト: tests/test_alembic_migration.py::test_category_data_migration_converts_legacy_values
 
 ## マイグレーション
 

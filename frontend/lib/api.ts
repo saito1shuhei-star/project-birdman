@@ -100,6 +100,59 @@ export type SizingRun = {
   created_at: string;
 };
 
+export type WingSection = {
+  spanwise_position: Quantity;
+  chord: Quantity;
+  twist_deg: number;
+  airfoil: string;
+};
+
+export type WingPlanform = { sections: WingSection[] };
+
+export type WingPlanformOut = {
+  id: string;
+  project_id: string;
+  revision: number;
+  created_at: string;
+  planform: WingPlanform;
+  derived: Record<string, Quantity>;
+};
+
+export type AeroPolarPoint = {
+  alpha_deg: number;
+  cl: number;
+  cd: number;
+  cm: number;
+  stalled: boolean;
+};
+
+export type AeroAnalysisRun = {
+  id: string;
+  project_id: string;
+  solver_name: string;
+  planform_revision: number | null;
+  requirement_revision: number | null;
+  input_hash: string;
+  request: {
+    airfoil_name: string;
+    aspect_ratio: number;
+    oswald_efficiency: number;
+    parasite_drag_coefficient: number;
+    cl_max: number;
+    alpha_min_deg: number;
+    alpha_max_deg: number;
+    alpha_step_deg: number;
+  };
+  outputs: {
+    polar: AeroPolarPoint[];
+    max_lift_to_drag: number;
+    cl_at_max_lift_to_drag: number;
+    warnings: CalcWarning[];
+  };
+  execution: SolverExecution;
+  created_at: string;
+};
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,

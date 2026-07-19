@@ -60,3 +60,37 @@ class SizingRunRow(Base):
     execution: Mapped[dict] = mapped_column(JSON)
     result_status: Mapped[str] = mapped_column(String(20))
     created_at: Mapped[str] = mapped_column(String(40))
+
+
+class WingPlanformRow(Base):
+    __tablename__ = "wing_planforms"
+    __table_args__ = (UniqueConstraint("project_id", "revision"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    revision: Mapped[int] = mapped_column(Integer)
+    payload: Mapped[dict] = mapped_column(JSON)  # WingPlanformInput(セクション列、値+単位)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
+class AnalysisRunRow(Base):
+    """外部ソルバー(XFLR5/XROTOR等)による解析実行。mock/realはexecution内で区別。"""
+
+    __tablename__ = "analysis_runs"
+    __table_args__ = (Index("ix_analysis_runs_input_hash", "input_hash"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    solver_name: Mapped[str] = mapped_column(String(50))  # "XFLR5" / "XROTOR" 等
+    planform_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    requirement_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    input_hash: Mapped[str] = mapped_column(String(64))
+    request: Mapped[dict] = mapped_column(JSON)
+    outputs: Mapped[dict] = mapped_column(JSON)
+    execution: Mapped[dict] = mapped_column(JSON)
+    result_status: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[str] = mapped_column(String(40))

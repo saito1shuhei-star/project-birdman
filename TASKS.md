@@ -43,7 +43,7 @@
 - [ ] T-202b XFLR5 real実行連携(実際のXFLR5起動・結果パース)。実機XFLR5での検証が必要 ← T-202
 - [~] T-203 XROTORアダプター mock先行分(2026-07-19。`pbm.adapters.xrotor.XROTORAdapter`、`pbm.calculation.prop_mock_momentum`(運動量理論=理論上限、手計算リファレンスRC-P1・Froude恒等式・エネルギー収支テスト付き)。**real実行連携は未実装**(T-203b)
 - [ ] T-203b XROTOR real実行連携(実際のXROTOR起動・結果パース)。実機XROTORでの検証が必要 ← T-203
-- [ ] T-204 WingPlanformモデルとUI、XFLR5解析のAPI/UI結線(Step 5画面)← T-202
+- [x] T-204 WingPlanformモデルとUI、XFLR5解析のAPI/UI結線(2026-07-19。WingPlanform(台形積分・手計算検証付き)、wing_planforms/analysis_runsテーブル+マイグレーション、PUT/GET planform・POST aero-analyses API(mock固定・状態calculated→analyzed遷移)、フロントエンドStep4/5セクション(平面形エディタ・導出量・ポーラ表・モック明示)。実ブラウザE2E確認済み。**過程でCategory enum変更のデータ移行漏れによる500エラーを発見し、データ移行`9706411a806d`+回帰テストで修正**)
 - [ ] T-205 解析ジョブ管理(非同期化)
 - [ ] T-206 Playwright導入(T-108)
 - [ ] T-301 簡易梁モデル / T-302 質量台帳 / T-303 静安定余裕 / T-304 承認UI+監査ログ

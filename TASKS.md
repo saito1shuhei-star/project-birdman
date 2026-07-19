@@ -32,7 +32,7 @@
 - [ ] T-111 過去機体1機分の実データでRC-1以外の妥当性確認(VALIDATION_PLAN §4)— ユーザー確認済み: 現時点では実測データなし。データ入手後に着手
 - [ ] T-112 docker compose up の実機検証(Docker導入後)← T-005
 - [x] T-113 GitHubリモート作成とCI初回実行(2026-07-19。公開リポジトリ https://github.com/saito1shuhei-star/project-birdman を作成しpush。CI初回実行success(34秒)。以後、push毎にruff+pytest+frontend buildが自動実行される)
-- [ ] T-114 フロントエンドの要求仕様フォームに全項目の単位選択UI(現状は代表単位固定)
+- [x] T-114 フロントエンドの要求仕様フォームの単位選択拡充(2026-07-19。質量kg/g/lb、速度m/s・km/h・knot、長さm/cm/mm/ft、密度kg/m³・g/L、高度m/ft。提供単位が次元込みでバックエンド受理されることをテストで担保)
 - [ ] T-115 requirements/historyの差分表示(FR-013後半)
 
 ## Phase 2 以降(ROADMAP.md参照)

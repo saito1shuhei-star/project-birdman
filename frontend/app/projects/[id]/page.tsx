@@ -372,13 +372,16 @@ export default function ProjectPage() {
       <h2>要求仕様(Step 2)</h2>
       <form className="card" onSubmit={saveRequirements}>
         <div className="grid2">
-          {quantityField("パイロット質量", form.pilot_mass, ["kg", "lb"], (q) =>
-            setForm({ ...form, pilot_mass: q }),
+          {quantityField(
+            "パイロット質量",
+            form.pilot_mass,
+            ["kg", "g", "lb"],
+            (q) => setForm({ ...form, pilot_mass: q }),
           )}
           {quantityField(
             "機体質量目標",
             form.airframe_mass_target,
-            ["kg", "lb"],
+            ["kg", "g", "lb"],
             (q) => setForm({ ...form, airframe_mass_target: q }),
           )}
           {quantityField(
@@ -390,28 +393,28 @@ export default function ProjectPage() {
           {quantityField(
             "目標巡航速度",
             form.target_cruise_speed,
-            ["m/s", "km/h"],
+            ["m/s", "km/h", "knot"],
             (q) => setForm({ ...form, target_cruise_speed: q }),
           )}
           {quantityField(
             "翼幅制限(※大会規則ではなくチーム独自の設計制約)",
             form.wingspan_limit,
-            ["m", "mm"],
+            ["m", "cm", "mm", "ft"],
             (q) => setForm({ ...form, wingspan_limit: q }),
           )}
-          {quantityField("空気密度", form.air_density, ["kg/m^3"], (q) =>
+          {quantityField("空気密度", form.air_density, ["kg/m^3", "g/L"], (q) =>
             setForm({ ...form, air_density: q }),
           )}
           {quantityField(
             "風速条件の上限(参考: 大会規則の競技中断基準 5 m/s)",
             form.wind_speed_limit,
-            ["m/s", "km/h"],
+            ["m/s", "km/h", "knot"],
             (q) => setForm({ ...form, wind_speed_limit: q }),
           )}
           {quantityField(
             "飛行制限高度(参考: 大会規則 10 m)",
             form.flight_altitude_limit,
-            ["m"],
+            ["m", "ft"],
             (q) => setForm({ ...form, flight_altitude_limit: q }),
           )}
         </div>

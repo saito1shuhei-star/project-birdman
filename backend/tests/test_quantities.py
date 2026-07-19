@@ -52,3 +52,29 @@ class TestDimensionCheck:
     def test_mismatch_raises(self):
         with pytest.raises(UnitDimensionError, match="次元が不正"):
             ensure_dimension(Quantity(value=60, unit="m"), "[mass]", field_name="pilot_mass")
+
+
+class TestFrontendOfferedUnits:
+    """フロントエンドの単位選択UI(T-114)が提供する全単位がバックエンドで受理される。
+
+    frontend/app/projects/[id]/page.tsx のquantityField単位リストと同期を保つこと。
+    """
+
+    @pytest.mark.parametrize(
+        ("unit", "dimension"),
+        [
+            ("kg", "[mass]"), ("g", "[mass]"), ("lb", "[mass]"),
+            ("W", "[power]"), ("kW", "[power]"),
+            ("m/s", "[length] / [time]"), ("km/h", "[length] / [time]"),
+            ("knot", "[length] / [time]"),
+            ("m", "[length]"), ("cm", "[length]"), ("mm", "[length]"), ("ft", "[length]"),
+            ("kg/m^3", "[mass] / [length] ** 3"), ("g/L", "[mass] / [length] ** 3"),
+        ],
+    )
+    def test_unit_parses_with_expected_dimension(self, unit, dimension):
+        ensure_dimension(Quantity(value=1.0, unit=unit), dimension)
+
+    def test_g_per_liter_equals_kg_per_m3(self):
+        # 1 g/L = 1 kg/m³(空気密度の代替単位として提供)
+        q = Quantity(value=1.225, unit="g/L")
+        assert q.magnitude_si == pytest.approx(1.225, rel=1e-12)

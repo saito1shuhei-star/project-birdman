@@ -89,6 +89,49 @@ const PLANFORM_DERIVED_LABELS: [string, string][] = [
   ["taper_ratio", "テーパー比 λ"],
 ];
 
+// 要求仕様フィールドの日本語名(履歴差分の表示用)
+const SPEC_FIELD_LABELS: Record<string, string> = {
+  pilot_mass: "パイロット質量",
+  airframe_mass_target: "機体質量目標",
+  pilot_power_sustained: "パイロット持続出力",
+  pilot_power_max: "パイロット最大出力",
+  target_cruise_speed: "目標巡航速度",
+  target_distance: "目標飛行距離",
+  wingspan_limit: "翼幅制限",
+  air_density: "空気密度",
+  wind_speed_limit: "風速条件の上限",
+  flight_altitude_limit: "飛行制限高度",
+  pilot_age: "パイロット年齢",
+  cl_cruise: "CL_cruise",
+  cl_max: "CL_max",
+  cd0: "CD0",
+  oswald_efficiency: "オズワルド効率 e",
+  propeller_efficiency: "プロペラ効率 η_prop",
+  drivetrain_efficiency: "駆動系効率 η_drive",
+};
+
+// リビジョン間の変更点を「項目: 旧 → 新」の文字列リストで返す(表示用。計算はしない)
+function specDiff(prev: RequirementSpec, curr: RequirementSpec): string[] {
+  const fmt = (v: unknown): string => {
+    if (v == null) return "—";
+    if (typeof v === "object" && "value" in (v as object)) {
+      const q = v as { value: number; unit: string };
+      return `${q.value} ${q.unit}`;
+    }
+    return String(v);
+  };
+  const keys = Object.keys(SPEC_FIELD_LABELS) as (keyof RequirementSpec)[];
+  const lines: string[] = [];
+  for (const k of keys) {
+    const a = prev[k];
+    const b = curr[k];
+    if (JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)) {
+      lines.push(`${SPEC_FIELD_LABELS[k]}: ${fmt(a)} → ${fmt(b)}`);
+    }
+  }
+  return lines;
+}
+
 function quantityField(
   label: string,
   field: QuantityForm,
@@ -132,8 +175,22 @@ export default function ProjectPage() {
   const [sections, setSections] = useState<SectionForm[]>(DEFAULT_SECTIONS);
   const [planformOut, setPlanformOut] = useState<WingPlanformOut | null>(null);
   const [latestAero, setLatestAero] = useState<AeroAnalysisRun | null>(null);
+  const [history, setHistory] = useState<RequirementSpecOut[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const reloadHistory = useCallback(async () => {
+    try {
+      setHistory(
+        await apiFetch<RequirementSpecOut[]>(
+          `/api/projects/${projectId}/requirements/history`,
+        ),
+      );
+    } catch {
+      // 履歴なしは無視
+    }
+  }, [projectId]);
 
   const reloadProject = useCallback(async () => {
     setProject(await apiFetch<Project>(`/api/projects/${projectId}`));
@@ -217,11 +274,12 @@ export default function ProjectPage() {
         } catch {
           // 解析履歴なしは無視
         }
+        await reloadHistory();
       } catch (e) {
         setError(String(e));
       }
     })();
-  }, [projectId, reloadProject]);
+  }, [projectId, reloadProject, reloadHistory]);
 
   const savePlanform = async () => {
     setBusy(true);
@@ -318,6 +376,7 @@ export default function ProjectPage() {
       setRevision(saved.revision);
       setLatestRun(null);
       await reloadProject();
+      await reloadHistory();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -504,6 +563,44 @@ export default function ProjectPage() {
           初期サイジングを実行(Step 3)
         </button>
       </form>
+
+      {history.length > 1 && (
+        <div className="card">
+          <button type="button" onClick={() => setShowHistory(!showHistory)}>
+            要求仕様の変更履歴({history.length}リビジョン){showHistory ? "を閉じる" : "を表示"}
+          </button>
+          {showHistory && (
+            <table>
+              <thead>
+                <tr>
+                  <th>rev</th>
+                  <th>日時</th>
+                  <th>前リビジョンからの変更点</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h, i) => {
+                  const older = history[i + 1]; // 降順のため次要素が1つ前のリビジョン
+                  const changes = older ? specDiff(older.spec, h.spec) : null;
+                  return (
+                    <tr key={h.id}>
+                      <td>{h.revision}</td>
+                      <td>{new Date(h.created_at).toLocaleString("ja-JP")}</td>
+                      <td>
+                        {changes === null
+                          ? "(初版)"
+                          : changes.length === 0
+                            ? "変更なし(再保存)"
+                            : changes.map((c) => <div key={c}>{c}</div>)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {latestRun && (
         <>

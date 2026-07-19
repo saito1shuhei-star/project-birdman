@@ -84,9 +84,21 @@
 静安定(pbm.static_stability)・梁解析(pbm.spar_beam)の実行結果はanalysis_runsに保存し、
 `solver_name`でXFLR5等と区別する(一覧APIはソルバー別にフィルタ)。
 
+### approvals(T-304で追加。マイグレーション`df0509daf2b8`)
+
+| 列 | 型 | 制約 |
+|---|---|---|
+| id | TEXT(UUID) | PK |
+| project_id | TEXT | FK projects.id, ON DELETE CASCADE |
+| from_state / to_state | TEXT | DesignState |
+| actor | TEXT? | 自動遷移(サイジング・空力解析による遷移)はNULL |
+| comment | TEXT? | |
+| created_at | TEXT | 追記のみ・削除不可(監査ログ) |
+
+設計スイープ(pbm.design_sweep)の実行結果もanalysis_runsに保存される。
+
 ### 将来テーブル(予約・未実装)
 
-- approvals(Phase 3: run_id, actor, action, comment, created_at — 承認監査ログ)
 - knowledge_entries(Phase 3+)
 
 ### スキーマ・データ変更の教訓(2026-07-19)

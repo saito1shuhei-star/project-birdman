@@ -142,6 +142,20 @@ OpenAPIドキュメント: `/docs`(自動生成)。
   - 出力: 翼根せん断/曲げ/応力、翼端たわみ、安全率、分布(最大21点)+警告(SF不足違反、たわみ比>0.1、薄肉座屈リスク)
 - `GET /api/projects/{id}/spar-analyses`
 
+## 設計スイープ(Step 11、T-401 MVP)
+
+- `POST /api/projects/{id}/design-sweeps` → 201(要求仕様が基準。未入力409)
+  - body: `{"variables": [{"variable": "wingspan"|"cruise_speed"|"cl_cruise", "minimum", "maximum", "steps"(2–15)}]}`(1–2変数、評価数≤200)
+  - 評価は初期サイジングと同一モデル。violation警告のある案は不可行。必要出力最小×L/D最大のパレートフラグ付き候補一覧を返す(必要出力の小さい順)
+  - **最適解の自動採用はしない**(候補提示のみ。採用は人間の承認事項: PROJECT_BRIEF §2)
+- `GET /api/projects/{id}/design-sweeps`
+
+## 承認・監査(T-304)
+
+- `GET /api/projects/{id}/transitions` → `{current, allowed[], actor_required[]}`(承認UIが使用)
+- `GET /api/projects/{id}/approvals` → 状態遷移の監査ログ(新しい順)。自動遷移(サイジング実行によるdraft→calculated等)は`actor=null`で記録される
+- POST /transition は従来どおり。成功した遷移はすべてapprovalsに記録される
+
 ## 状態遷移(Phase 1はAPI最小限)
 
 `POST /api/projects/{project_id}/transition` → 200 / 409

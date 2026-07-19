@@ -14,14 +14,18 @@ import pbm
 from pbm.adapters.base import ExecutionMode, ResultStatus, SolverExecution
 from pbm.api.schemas import (
     AeroAnalysisRunOut,
+    ApprovalOut,
     HealthOut,
     RequirementSpecOut,
     SizingRunSummary,
     SparRunOut,
     StabilityRunOut,
+    SweepRunOut,
     TransitionRequest,
+    TransitionsOut,
     WingPlanformOut,
 )
+from pbm.calculation.design_sweep import run_design_sweep
 from pbm.calculation.mass_properties import MassPropertiesOutput, compute_mass_properties
 from pbm.calculation.spar_beam import run_spar_analysis
 from pbm.calculation.static_stability import compute_static_stability
@@ -29,6 +33,7 @@ from pbm.domain.aero_analysis import AeroAnalysisOutput, AeroAnalysisRequest
 from pbm.domain.entities import Project, ProjectCreate
 from pbm.domain.errors import MissingRequirementError, NotFoundError
 from pbm.domain.mass_item import MassItem, MassItemInput
+from pbm.domain.optimization import DesignSweepOutput, DesignSweepRequest
 from pbm.domain.planform import WingPlanformInput
 from pbm.domain.requirements import RequirementSpecInput
 from pbm.domain.results import SizingRunResult
@@ -40,7 +45,12 @@ from pbm.reports.html_report import render_sizing_report
 from pbm.workflow.aero_service import build_aero_request, execute_aero_analysis
 from pbm.workflow.hashing import compute_input_hash
 from pbm.workflow.sizing_service import execute_sizing
-from pbm.workflow.states import ensure_approved_for_manufacturing, validate_transition
+from pbm.workflow.states import (
+    ACTOR_REQUIRED_STATES,
+    ALLOWED_TRANSITIONS,
+    ensure_approved_for_manufacturing,
+    validate_transition,
+)
 
 logger = logging.getLogger("pbm.api")
 
@@ -146,6 +156,11 @@ def run_sizing(project_id: str, session: Session = Depends(get_session)) -> Sizi
     if project.status is DesignState.draft:
         validate_transition(DesignState.draft, DesignState.calculated)
         repository.set_project_status(session, project_id, DesignState.calculated)
+        repository.record_transition(
+            session, project_id,
+            from_state=DesignState.draft, to_state=DesignState.calculated,
+            actor=None, comment="自動遷移: 初期サイジング実行",
+        )
     return result
 
 
@@ -176,11 +191,66 @@ def get_sizing_run(run_id: str, session: Session = Depends(get_session)) -> Sizi
     return repository.get_sizing_run(session, run_id)
 
 
+def _build_report_extras(session: Session, project_id: str, run: SizingRunResult) -> dict:
+    """レポートに載せる「生成時点の最新プロジェクト状態」を集める(Step 4–9+承認履歴)。"""
+    extras: dict = {}
+
+    planform_row = repository.latest_planform_row(session, project_id)
+    if planform_row is not None:
+        planform = WingPlanformInput.model_validate(planform_row.payload)
+        extras["planform"] = {
+            "revision": planform_row.revision,
+            "derived": planform.derived_quantities(),
+        }
+
+    aero_rows = repository.list_analysis_runs(session, project_id, solver_name="XFLR5")
+    if aero_rows:
+        row = aero_rows[0]
+        outputs = AeroAnalysisOutput.model_validate(row.outputs)
+        extras["aero"] = {
+            "execution": SolverExecution.model_validate(row.execution),
+            "max_lift_to_drag": outputs.max_lift_to_drag,
+            "cl_at_max_lift_to_drag": outputs.cl_at_max_lift_to_drag,
+            "warnings": outputs.warnings,
+        }
+
+    items = repository.list_mass_items(session, project_id)
+    if items:
+        extras["mass"] = compute_mass_properties(
+            [MassItemInput.model_validate(i.model_dump()) for i in items],
+            airframe_mass_target=run.inputs_snapshot.airframe_mass_target,
+        )
+
+    stab_rows = repository.list_analysis_runs(
+        session, project_id, solver_name="pbm.static_stability"
+    )
+    if stab_rows:
+        row = stab_rows[0]
+        extras["stability"] = {
+            "execution": SolverExecution.model_validate(row.execution),
+            "outputs": StabilityOutput.model_validate(row.outputs),
+        }
+
+    spar_rows = repository.list_analysis_runs(session, project_id, solver_name="pbm.spar_beam")
+    if spar_rows:
+        row = spar_rows[0]
+        extras["spar"] = {
+            "execution": SolverExecution.model_validate(row.execution),
+            "outputs": SparAnalysisOutput.model_validate(row.outputs),
+        }
+
+    approvals = repository.list_approvals(session, project_id)
+    if approvals:
+        extras["approvals"] = approvals
+    return extras
+
+
 @router.get("/sizing-runs/{run_id}/report", response_class=HTMLResponse)
 def sizing_report(run_id: str, session: Session = Depends(get_session)) -> HTMLResponse:
     run = repository.get_sizing_run(session, run_id)
     project = repository.get_project(session, run.project_id)
-    html = render_sizing_report(project, run)
+    extras = _build_report_extras(session, run.project_id, run)
+    html = render_sizing_report(project, run, extras=extras)
     return HTMLResponse(content=html)
 
 
@@ -273,6 +343,11 @@ def run_aero_analysis(
     if project.status is DesignState.calculated:
         validate_transition(DesignState.calculated, DesignState.analyzed)
         repository.set_project_status(session, project_id, DesignState.analyzed)
+        repository.record_transition(
+            session, project_id,
+            from_state=DesignState.calculated, to_state=DesignState.analyzed,
+            actor=None, comment="自動遷移: 空力解析実行",
+        )
     return _analysis_run_out(row)
 
 
@@ -494,6 +569,74 @@ def list_spar_analyses(
     return [_spar_run_out(r) for r in runs]
 
 
+# --- 設計スイープ(Step 11 / T-401) ---
+
+
+def _sweep_run_out(row) -> SweepRunOut:  # noqa: ANN001
+    return SweepRunOut(
+        id=row.id,
+        project_id=row.project_id,
+        requirement_revision=row.requirement_revision,
+        input_hash=row.input_hash,
+        request=DesignSweepRequest.model_validate(row.request),
+        outputs=DesignSweepOutput.model_validate(row.outputs),
+        execution=SolverExecution.model_validate(row.execution),
+        created_at=datetime.fromisoformat(row.created_at),
+    )
+
+
+@router.post(
+    "/projects/{project_id}/design-sweeps", response_model=SweepRunOut, status_code=201
+)
+def run_design_sweep_endpoint(
+    project_id: str, request: DesignSweepRequest, session: Session = Depends(get_session)
+) -> SweepRunOut:
+    """設計変数のグリッドスイープ。最適解の自動採用はしない(候補提示のみ)。"""
+    repository.get_project(session, project_id)
+    req_row = repository.latest_requirements_row(session, project_id)
+    if req_row is None:
+        raise MissingRequirementError(
+            f"要求仕様が未入力のためスイープを実行できません: project={project_id}"
+        )
+    base = RequirementSpecInput.model_validate(req_row.payload)
+    context = {
+        "sweep": request.model_dump(mode="json"),
+        "base_requirements_revision": req_row.revision,
+        "base_requirements": req_row.payload,
+    }
+    started_at = datetime.now(UTC)
+    outputs = run_design_sweep(base, request)
+    finished_at = datetime.now(UTC)
+    execution = SolverExecution(
+        solver_name="pbm.design_sweep",
+        solver_version=pbm.__version__,
+        execution_mode=ExecutionMode.analytical_estimate,
+        input_hash=compute_input_hash(context),
+        started_at=started_at,
+        finished_at=finished_at,
+        result_status=ResultStatus.ok,
+    )
+    row = repository.save_analysis_run(
+        session,
+        project_id=project_id,
+        solver_name="pbm.design_sweep",
+        planform_revision=None,
+        requirement_revision=req_row.revision,
+        request=request.model_dump(mode="json"),
+        outputs=outputs.model_dump(mode="json"),
+        execution=execution,
+    )
+    return _sweep_run_out(row)
+
+
+@router.get("/projects/{project_id}/design-sweeps", response_model=list[SweepRunOut])
+def list_design_sweeps(
+    project_id: str, session: Session = Depends(get_session)
+) -> list[SweepRunOut]:
+    runs = repository.list_analysis_runs(session, project_id, solver_name="pbm.design_sweep")
+    return [_sweep_run_out(r) for r in runs]
+
+
 # --- 状態遷移・製造ガード ---
 
 
@@ -507,7 +650,41 @@ def transition(
         "state transition project=%s %s -> %s actor=%s comment=%s",
         project_id, project.status, req.to, req.actor, req.comment,
     )
-    return repository.set_project_status(session, project_id, req.to)
+    updated = repository.set_project_status(session, project_id, req.to)
+    repository.record_transition(
+        session, project_id,
+        from_state=project.status, to_state=req.to,
+        actor=req.actor, comment=req.comment,
+    )
+    return updated
+
+
+@router.get("/projects/{project_id}/transitions", response_model=TransitionsOut)
+def get_transitions(project_id: str, session: Session = Depends(get_session)) -> TransitionsOut:
+    """現在状態と許可される遷移先(承認UIが使用)。"""
+    project = repository.get_project(session, project_id)
+    return TransitionsOut(
+        current=project.status,
+        allowed=sorted(ALLOWED_TRANSITIONS[project.status]),
+        actor_required=sorted(ACTOR_REQUIRED_STATES),
+    )
+
+
+@router.get("/projects/{project_id}/approvals", response_model=list[ApprovalOut])
+def list_approvals(project_id: str, session: Session = Depends(get_session)) -> list[ApprovalOut]:
+    """状態遷移の監査ログ(新しい順。自動遷移はactor=null)。"""
+    return [
+        ApprovalOut(
+            id=r.id,
+            project_id=r.project_id,
+            from_state=DesignState(r.from_state),
+            to_state=DesignState(r.to_state),
+            actor=r.actor,
+            comment=r.comment,
+            created_at=datetime.fromisoformat(r.created_at),
+        )
+        for r in repository.list_approvals(session, project_id)
+    ]
 
 
 @router.post("/projects/{project_id}/manufacturing-export")

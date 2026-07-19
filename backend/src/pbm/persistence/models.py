@@ -91,6 +91,22 @@ class MassItemRow(Base):
     updated_at: Mapped[str] = mapped_column(String(40))
 
 
+class ApprovalRow(Base):
+    """設計状態遷移の監査ログ(T-304)。自動遷移も含め全遷移を記録する(追記のみ)。"""
+
+    __tablename__ = "approvals"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    from_state: Mapped[str] = mapped_column(String(30))
+    to_state: Mapped[str] = mapped_column(String(30))
+    actor: Mapped[str | None] = mapped_column(String(200), nullable=True)  # 自動遷移はNULL
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[str] = mapped_column(String(40))
+
+
 class AnalysisRunRow(Base):
     """外部ソルバー(XFLR5/XROTOR等)による解析実行。mock/realはexecution内で区別。"""
 

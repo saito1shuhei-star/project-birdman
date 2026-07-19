@@ -40,7 +40,21 @@ def _sig4(value: float) -> str:
     return format(value, ".4g")
 
 
-def render_sizing_report(project: Project, run: SizingRunResult) -> str:
+def render_sizing_report(
+    project: Project,
+    run: SizingRunResult,
+    extras: dict | None = None,
+) -> str:
+    """サイジングレポートを描画する。
+
+    extras(任意)はレポート生成時点の最新プロジェクト状態:
+      planform: {"revision": int, "derived": dict[str, Quantity]}
+      aero_run / stability_run / spar_run: {"execution": SolverExecution,
+          "quantities"/"summary": dict[str, Quantity], "warnings": list[CalcWarning], ...}
+      mass: MassPropertiesOutput相当のdict
+      approvals: list[dict](from/to/actor/comment/created_at)
+    サイジング実行時点のデータではない点をテンプレート側で明示する。
+    """
     template = _env.get_template("sizing_report.html.j2")
     results = [
         {"key": key, "label": label, "quantity": run.outputs.quantities[key]}
@@ -53,4 +67,5 @@ def render_sizing_report(project: Project, run: SizingRunResult) -> str:
         results=results,
         sig4=_sig4,
         inputs=run.inputs_snapshot,
+        extras=extras or {},
     )

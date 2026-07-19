@@ -59,4 +59,18 @@ test("設計ワークフローの縦スライスが一通り動作する", async
   await page.getByRole("button", { name: "梁解析を実行" }).click();
   await expect(page.getByText("翼根曲げモーメント")).toBeVisible();
   await expect(page.getByText("安全率 SF")).toBeVisible();
+
+  // --- 設計スイープ(Step 11) ---
+  await page.getByRole("button", { name: "スイープを実行" }).click();
+  await expect(page.getByText(/評価 \d+ 案/)).toBeVisible();
+
+  // --- 承認フロー(T-304): analyzed → review_required → approved ---
+  await page.getByLabel("判断者(actor)").fill("E2E設計責任者");
+  await page.getByLabel("コメント").fill("E2E承認テスト");
+  await page.getByRole("button", { name: /review_required へ遷移/ }).click();
+  await expect(page.getByText("analyzed → review_required")).toBeVisible();
+  await page.getByRole("button", { name: /approved へ遷移/ }).click();
+  await expect(page.getByText("review_required → approved")).toBeVisible();
+  // 監査ログに自動遷移も記録されている
+  await expect(page.getByText("(自動遷移)").first()).toBeVisible();
 });

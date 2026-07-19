@@ -21,6 +21,7 @@ from pbm.domain.results import SizingOutput, SizingRunResult
 from pbm.domain.states import DesignState
 from pbm.persistence.models import (
     AnalysisRunRow,
+    ApprovalRow,
     MassItemRow,
     ProjectRow,
     RequirementSpecRow,
@@ -345,3 +346,40 @@ def delete_mass_item(session: Session, item_id: str) -> None:
         raise NotFoundError(f"質量部品が存在しません: {item_id}")
     session.delete(row)
     session.commit()
+
+
+# --- approvals(状態遷移の監査ログ。追記のみ・削除不可) ---
+
+
+def record_transition(
+    session: Session,
+    project_id: str,
+    *,
+    from_state: DesignState,
+    to_state: DesignState,
+    actor: str | None,
+    comment: str | None,
+) -> ApprovalRow:
+    row = ApprovalRow(
+        id=str(uuid.uuid4()),
+        project_id=project_id,
+        from_state=from_state.value,
+        to_state=to_state.value,
+        actor=actor,
+        comment=comment,
+        created_at=_now_iso(),
+    )
+    session.add(row)
+    session.commit()
+    return row
+
+
+def list_approvals(session: Session, project_id: str) -> list[ApprovalRow]:
+    get_project_row(session, project_id)
+    return list(
+        session.scalars(
+            select(ApprovalRow)
+            .where(ApprovalRow.project_id == project_id)
+            .order_by(ApprovalRow.created_at.desc())
+        ).all()
+    )

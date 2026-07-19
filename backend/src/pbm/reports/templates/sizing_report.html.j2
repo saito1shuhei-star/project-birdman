@@ -112,6 +112,82 @@
   {% endfor %}
 </table>
 
+{% if extras %}
+<h2>プロジェクト現況(Step 4–9)</h2>
+<p class="meta"><strong>注意:</strong> 本節はレポート生成時点の最新データであり、
+上記サイジング実行時点の入力と一致しない場合があります(各項目のリビジョン・実行モードを確認すること)。</p>
+
+{% if extras.planform %}
+<h3>主翼平面形(rev.{{ extras.planform.revision }})</h3>
+<table>
+  <tr><th>翼幅 b</th><td>{{ sig4(extras.planform.derived["span"].value) }} m</td>
+      <th>翼面積 S</th><td>{{ sig4(extras.planform.derived["area"].value) }} m²</td></tr>
+  <tr><th>アスペクト比 AR</th><td>{{ sig4(extras.planform.derived["aspect_ratio"].value) }}</td>
+      <th>テーパー比 λ</th><td>{{ sig4(extras.planform.derived["taper_ratio"].value) }}</td></tr>
+</table>
+{% endif %}
+
+{% if extras.aero %}
+<h3>空力解析(最新)</h3>
+<p><span class="badge {{ extras.aero.execution.execution_mode }}">{{ extras.aero.execution.execution_mode }}</span>
+  {% if extras.aero.execution.execution_mode == "mock" %}(揚力線理論による近似。実XFLR5解析ではない){% endif %}
+  — (L/D)max = {{ sig4(extras.aero.max_lift_to_drag) }} @ CL = {{ sig4(extras.aero.cl_at_max_lift_to_drag) }}</p>
+{% endif %}
+
+{% if extras.mass %}
+<h3>質量・重心(台帳より。推定{{ extras.mass.estimated_item_count }}件/実測{{ extras.mass.measured_item_count }}件)</h3>
+<table>
+  <tr><th>総質量</th><td>{{ sig4(extras.mass.quantities["total_mass"].value) }} kg</td>
+      <th>機体質量(パイロット除く)</th><td>{{ sig4(extras.mass.quantities["airframe_mass"].value) }} kg</td></tr>
+  <tr><th>重心 x</th><td>{{ sig4(extras.mass.quantities["cg_x"].value) }} m</td>
+      <th>ピッチ慣性 Iyy</th><td>{{ sig4(extras.mass.quantities["inertia_yy"].value) }} kg·m²</td></tr>
+  {% if extras.mass.quantities.get("airframe_mass_delta") %}
+  <tr><th>質量目標との差</th><td colspan="3">{{ sig4(extras.mass.quantities["airframe_mass_delta"].value) }} kg</td></tr>
+  {% endif %}
+</table>
+{% for w in extras.mass.warnings %}
+<p class="warn-{{ w.severity }}">[{{ w.code }}] {{ w.message }}</p>
+{% endfor %}
+{% endif %}
+
+{% if extras.stability %}
+<h3>静安定(最新)</h3>
+<p><span class="badge {{ extras.stability.execution.execution_mode }}">{{ extras.stability.execution.execution_mode }}</span>
+  — V_H = {{ sig4(extras.stability.outputs.quantities["tail_volume_horizontal"].value) }} /
+  x_np = {{ sig4(extras.stability.outputs.quantities["neutral_point_x"].value) }} m /
+  SM = {{ sig4(extras.stability.outputs.quantities["static_margin"].value) }}</p>
+{% for w in extras.stability.outputs.warnings %}
+<p class="warn-{{ w.severity }}">[{{ w.code }}] {{ w.message }}</p>
+{% endfor %}
+{% endif %}
+
+{% if extras.spar %}
+<h3>主桁梁解析(最新)</h3>
+<p><span class="badge {{ extras.spar.execution.execution_mode }}">{{ extras.spar.execution.execution_mode }}</span>
+  — 翼根曲げ {{ sig4(extras.spar.outputs.quantities["root_bending_moment"].value) }} N·m /
+  翼根応力 {{ sig4(extras.spar.outputs.quantities["root_bending_stress"].value) }} Pa /
+  安全率 {{ sig4(extras.spar.outputs.quantities["safety_factor"].value) }}</p>
+{% for w in extras.spar.outputs.warnings %}
+<p class="warn-{{ w.severity }}">[{{ w.code }}] {{ w.message }}</p>
+{% endfor %}
+{% endif %}
+
+{% if extras.approvals %}
+<h3>設計状態の変更履歴(承認監査ログ)</h3>
+<table>
+  <tr><th>日時</th><th>遷移</th><th>判断者</th><th>コメント</th></tr>
+  {% for a in extras.approvals %}
+  <tr>
+    <td>{{ a.created_at }}</td>
+    <td>{{ a.from_state }} → {{ a.to_state }}</td>
+    <td>{{ a.actor or "(自動遷移)" }}</td>
+    <td>{{ a.comment or "" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endif %}
+
 <h2>適用範囲</h2>
 <ul>
   <li>定常・等速・水平飛行のみを対象とする。旋回・離陸・突風応答は含まない</li>

@@ -31,11 +31,16 @@ class SparAnalysisRequest(BaseModel):
     load_factor: float = Field(gt=0, le=10.0)          # 荷重倍数 n(既定値なし)
     total_mass: Quantity                                # 全備質量(要求仕様から転記可)
     lift_distribution: LiftDistribution = LiftDistribution.elliptic
-    spar_outer_diameter: Quantity
-    spar_wall_thickness: Quantity
+    spar_outer_diameter: Quantity                       # 翼根の外径
+    spar_wall_thickness: Quantity                       # 翼根の肉厚
+    # テーパー桁: 翼端側の断面(省略時は翼根と同じ=一定断面)。翼根⇔翼端は線形補間
+    spar_tip_outer_diameter: Quantity | None = None
+    spar_tip_wall_thickness: Quantity | None = None
     elastic_modulus: Quantity                           # 材料ヤング率 E(既定値なし)
     allowable_stress: Quantity                          # 許容応力(既定値なし)
     required_safety_factor: float = Field(gt=0, le=20.0)  # 要求安全率(既定値なし)
+    # 等方性近似のポアソン比(A-145)。座屈スクリーニングに使用
+    poisson_ratio: float = Field(default=0.3, ge=0.0, le=0.49)
     stations: int = Field(default=101, ge=11, le=1001)  # 数値積分の分割数+1
 
     @model_validator(mode="after")
@@ -63,6 +68,31 @@ class SparAnalysisRequest(BaseModel):
                 f"spar_wall_thickness: 肉厚×2 ({2*t:g} m) が外径 ({d:g} m) 以上です"
                 "(円管が成立しない)"
             )
+        # テーパー断面はペアで指定(片方のみは曖昧なため拒否)
+        tip_d = self.spar_tip_outer_diameter
+        tip_t = self.spar_tip_wall_thickness
+        if (tip_d is None) != (tip_t is None):
+            raise ValueError(
+                "テーパー桁はspar_tip_outer_diameterとspar_tip_wall_thicknessを"
+                "両方指定してください(省略時は一定断面)"
+            )
+        if tip_d is not None and tip_t is not None:
+            ensure_dimension(tip_d, "[length]", "spar_tip_outer_diameter")
+            ensure_dimension(tip_t, "[length]", "spar_tip_wall_thickness")
+            td = tip_d.magnitude_si
+            tt = tip_t.magnitude_si
+            if not (0.005 <= td <= 0.5):
+                raise ValueError(
+                    f"spar_tip_outer_diameter: SI値 {td:g} m は範囲 0.005–0.5 m 外です"
+                )
+            if not (0.0002 <= tt <= 0.1):
+                raise ValueError(
+                    f"spar_tip_wall_thickness: SI値 {tt:g} m は範囲 0.0002–0.1 m 外です"
+                )
+            if 2.0 * tt >= td:
+                raise ValueError(
+                    f"spar_tip_wall_thickness: 肉厚×2 ({2*tt:g} m) が翼端外径 ({td:g} m) 以上です"
+                )
         return self
 
 

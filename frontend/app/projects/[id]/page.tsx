@@ -8,13 +8,16 @@ import {
   AnalysisRunLite,
   API_BASE,
   apiFetch,
+  CalcWarning,
   MassItem,
   MassProperties,
   Project,
+  Quantity,
   reportUrl,
   RequirementSpec,
   RequirementSpecOut,
   SizingRun,
+  SolverExecution,
   WingPlanformOut,
 } from "@/lib/api";
 
@@ -158,6 +161,8 @@ type SparForm = {
   distribution: string;
   d: string;
   t: string;
+  tipD: string;
+  tipT: string;
   e: string;
   sigmaAllow: string;
   requiredSf: string;
@@ -170,9 +175,67 @@ const DEFAULT_SPAR: SparForm = {
   distribution: "elliptic",
   d: "0.1",
   t: "1",
+  tipD: "",
+  tipT: "",
   e: "",
   sigmaAllow: "",
   requiredSf: "",
+};
+
+type TransitionsInfo = {
+  current: string;
+  allowed: string[];
+  actor_required: string[];
+};
+
+type ApprovalEntry = {
+  id: string;
+  from_state: string;
+  to_state: string;
+  actor: string | null;
+  comment: string | null;
+  created_at: string;
+};
+
+type SweepCandidateOut = {
+  values: Record<string, number>;
+  feasible: boolean;
+  pareto: boolean;
+  violation_codes: string[];
+  required_pilot_power: Quantity;
+  lift_to_drag: Quantity;
+  wing_area: Quantity;
+  power_margin: Quantity;
+};
+
+type SweepRun = {
+  id: string;
+  outputs: {
+    candidates: SweepCandidateOut[];
+    evaluated: number;
+    feasible_count: number;
+    pareto_count: number;
+    warnings: CalcWarning[];
+  };
+  execution: SolverExecution;
+};
+
+type SweepForm = {
+  spanMin: string;
+  spanMax: string;
+  spanSteps: string;
+  speedMin: string;
+  speedMax: string;
+  speedSteps: string;
+};
+
+const DEFAULT_SWEEP: SweepForm = {
+  spanMin: "26",
+  spanMax: "34",
+  spanSteps: "5",
+  speedMin: "6.5",
+  speedMax: "8.5",
+  speedSteps: "5",
 };
 
 // リビジョン間の変更点を「項目: 旧 → 新」の文字列リストで返す(表示用。計算はしない)
@@ -249,8 +312,83 @@ export default function ProjectPage() {
   const [stabilityRun, setStabilityRun] = useState<AnalysisRunLite | null>(null);
   const [sparForm, setSparForm] = useState<SparForm>(DEFAULT_SPAR);
   const [sparRun, setSparRun] = useState<AnalysisRunLite | null>(null);
+  const [transitions, setTransitions] = useState<TransitionsInfo | null>(null);
+  const [approvals, setApprovals] = useState<ApprovalEntry[]>([]);
+  const [transitionActor, setTransitionActor] = useState("");
+  const [transitionComment, setTransitionComment] = useState("");
+  const [sweepForm, setSweepForm] = useState<SweepForm>(DEFAULT_SWEEP);
+  const [sweepRun, setSweepRun] = useState<SweepRun | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const reloadApprovals = useCallback(async () => {
+    try {
+      setTransitions(
+        await apiFetch<TransitionsInfo>(`/api/projects/${projectId}/transitions`),
+      );
+      setApprovals(
+        await apiFetch<ApprovalEntry[]>(`/api/projects/${projectId}/approvals`),
+      );
+    } catch {
+      // 未取得は無視
+    }
+  }, [projectId]);
+
+  const doTransition = async (to: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiFetch(`/api/projects/${projectId}/transition`, {
+        method: "POST",
+        body: JSON.stringify({
+          to,
+          actor: transitionActor.trim() || null,
+          comment: transitionComment.trim() || null,
+        }),
+      });
+      await reloadProject();
+      await reloadApprovals();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runSweep = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const run = await apiFetch<SweepRun>(
+        `/api/projects/${projectId}/design-sweeps`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            variables: [
+              {
+                variable: "wingspan",
+                minimum: Number(sweepForm.spanMin),
+                maximum: Number(sweepForm.spanMax),
+                steps: Number(sweepForm.spanSteps),
+              },
+              {
+                variable: "cruise_speed",
+                minimum: Number(sweepForm.speedMin),
+                maximum: Number(sweepForm.speedMax),
+                steps: Number(sweepForm.speedSteps),
+              },
+            ],
+          }),
+        },
+      );
+      setSweepRun(run);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const reloadMass = useCallback(async () => {
     try {
@@ -368,11 +506,12 @@ export default function ProjectPage() {
         }
         await reloadHistory();
         await reloadMass();
+        await reloadApprovals();
       } catch (e) {
         setError(String(e));
       }
     })();
-  }, [projectId, reloadProject, reloadHistory, reloadMass]);
+  }, [projectId, reloadProject, reloadHistory, reloadMass, reloadApprovals]);
 
   const addMassItem = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -445,6 +584,8 @@ export default function ProjectPage() {
     setBusy(true);
     setError(null);
     try {
+      const hasTaper =
+        sparForm.tipD.trim() !== "" && sparForm.tipT.trim() !== "";
       const run = await apiFetch<AnalysisRunLite>(
         `/api/projects/${projectId}/spar-analyses`,
         {
@@ -456,6 +597,18 @@ export default function ProjectPage() {
             lift_distribution: sparForm.distribution,
             spar_outer_diameter: { value: Number(sparForm.d), unit: "m" },
             spar_wall_thickness: { value: Number(sparForm.t), unit: "mm" },
+            ...(hasTaper
+              ? {
+                  spar_tip_outer_diameter: {
+                    value: Number(sparForm.tipD),
+                    unit: "m",
+                  },
+                  spar_tip_wall_thickness: {
+                    value: Number(sparForm.tipT),
+                    unit: "mm",
+                  },
+                }
+              : {}),
             elastic_modulus: { value: Number(sparForm.e), unit: "GPa" },
             allowable_stress: {
               value: Number(sparForm.sigmaAllow),
@@ -507,6 +660,7 @@ export default function ProjectPage() {
       );
       setLatestAero(run);
       await reloadProject();
+      await reloadApprovals();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -586,6 +740,7 @@ export default function ProjectPage() {
       );
       setLatestRun(run);
       await reloadProject();
+      await reloadApprovals();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -1384,6 +1539,28 @@ export default function ProjectPage() {
             />
           </label>
           <label>
+            翼端外径 [m](任意・テーパー桁)
+            <input
+              type="number"
+              step="any"
+              value={sparForm.tipD}
+              onChange={(e) =>
+                setSparForm({ ...sparForm, tipD: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            翼端肉厚 [mm](任意・テーパー桁)
+            <input
+              type="number"
+              step="any"
+              value={sparForm.tipT}
+              onChange={(e) =>
+                setSparForm({ ...sparForm, tipT: e.target.value })
+              }
+            />
+          </label>
+          <label>
             ヤング率 E [GPa](要チーム確定)
             <input
               required
@@ -1458,6 +1635,191 @@ export default function ProjectPage() {
           </>
         )}
       </form>
+
+      <h2>設計スイープ(Step 11)</h2>
+      <form className="card" onSubmit={runSweep}>
+        <p className="note">
+          翼幅×巡航速度のグリッドを初期サイジングで評価します(解析的推定)。
+          <strong>PBMは最適解を自動採用しません。</strong>
+          候補とパレートフロントを提示するので、採用判断はチームで行ってください。
+        </p>
+        <div className="grid2">
+          <label>
+            翼幅 最小/最大/分割 [m]
+            <span style={{ display: "flex", gap: "0.4rem" }}>
+              <input
+                type="number"
+                step="any"
+                value={sweepForm.spanMin}
+                onChange={(e) =>
+                  setSweepForm({ ...sweepForm, spanMin: e.target.value })
+                }
+              />
+              <input
+                type="number"
+                step="any"
+                value={sweepForm.spanMax}
+                onChange={(e) =>
+                  setSweepForm({ ...sweepForm, spanMax: e.target.value })
+                }
+              />
+              <input
+                type="number"
+                min={2}
+                max={15}
+                value={sweepForm.spanSteps}
+                onChange={(e) =>
+                  setSweepForm({ ...sweepForm, spanSteps: e.target.value })
+                }
+              />
+            </span>
+          </label>
+          <label>
+            巡航速度 最小/最大/分割 [m/s]
+            <span style={{ display: "flex", gap: "0.4rem" }}>
+              <input
+                type="number"
+                step="any"
+                value={sweepForm.speedMin}
+                onChange={(e) =>
+                  setSweepForm({ ...sweepForm, speedMin: e.target.value })
+                }
+              />
+              <input
+                type="number"
+                step="any"
+                value={sweepForm.speedMax}
+                onChange={(e) =>
+                  setSweepForm({ ...sweepForm, speedMax: e.target.value })
+                }
+              />
+              <input
+                type="number"
+                min={2}
+                max={15}
+                value={sweepForm.speedSteps}
+                onChange={(e) =>
+                  setSweepForm({ ...sweepForm, speedSteps: e.target.value })
+                }
+              />
+            </span>
+          </label>
+        </div>
+        <button type="submit" disabled={busy || revision === null}>
+          スイープを実行
+        </button>
+        {sweepRun && (
+          <>
+            <p className="note">
+              評価 {sweepRun.outputs.evaluated} 案 / 可行{" "}
+              {sweepRun.outputs.feasible_count} 案 / パレート{" "}
+              {sweepRun.outputs.pareto_count} 案(必要出力の小さい順、上位15件表示)
+            </p>
+            {sweepRun.outputs.warnings.map((w) => (
+              <p key={w.code} className={`warn-${w.severity}`}>
+                [{w.code}] {w.message}
+              </p>
+            ))}
+            <table>
+              <thead>
+                <tr>
+                  <th>翼幅 [m]</th>
+                  <th>速度 [m/s]</th>
+                  <th>必要出力 [W]</th>
+                  <th>L/D</th>
+                  <th>翼面積 [m²]</th>
+                  <th>可行</th>
+                  <th>パレート</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sweepRun.outputs.candidates.slice(0, 15).map((c, i) => (
+                  <tr
+                    key={i}
+                    className={
+                      !c.feasible ? "warn-violation" : c.pareto ? "warn-info" : ""
+                    }
+                  >
+                    <td>{sig4(c.values["wingspan"] ?? 0)}</td>
+                    <td>{sig4(c.values["cruise_speed"] ?? 0)}</td>
+                    <td>{sig4(c.required_pilot_power.value)}</td>
+                    <td>{sig4(c.lift_to_drag.value)}</td>
+                    <td>{sig4(c.wing_area.value)}</td>
+                    <td>{c.feasible ? "○" : `✗ (${c.violation_codes.join(",")})`}</td>
+                    <td>{c.pareto ? "★" : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </form>
+
+      <h2>設計状態・承認(T-304)</h2>
+      <div className="card">
+        <p className="note">
+          現在の状態:{" "}
+          <span className={`badge ${project.status}`}>{project.status}</span>。
+          approved / rejected への遷移には判断者名が必要です。全遷移は監査ログに記録されます。
+        </p>
+        <div className="grid2">
+          <label>
+            判断者(actor)
+            <input
+              value={transitionActor}
+              onChange={(e) => setTransitionActor(e.target.value)}
+            />
+          </label>
+          <label>
+            コメント
+            <input
+              value={transitionComment}
+              onChange={(e) => setTransitionComment(e.target.value)}
+            />
+          </label>
+        </div>
+        {transitions &&
+          transitions.allowed.map((to) => (
+            <button
+              key={to}
+              type="button"
+              disabled={
+                busy ||
+                (transitions.actor_required.includes(to) &&
+                  transitionActor.trim() === "")
+              }
+              onClick={() => doTransition(to)}
+              style={{ marginRight: "0.5rem" }}
+            >
+              {to} へ遷移
+              {transitions.actor_required.includes(to) ? "(判断者名必須)" : ""}
+            </button>
+          ))}
+        {approvals.length > 0 && (
+          <table>
+            <thead>
+              <tr>
+                <th>日時</th>
+                <th>遷移</th>
+                <th>判断者</th>
+                <th>コメント</th>
+              </tr>
+            </thead>
+            <tbody>
+              {approvals.map((a) => (
+                <tr key={a.id}>
+                  <td>{new Date(a.created_at).toLocaleString("ja-JP")}</td>
+                  <td>
+                    {a.from_state} → {a.to_state}
+                  </td>
+                  <td>{a.actor ?? "(自動遷移)"}</td>
+                  <td>{a.comment ?? ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </>
   );
 }

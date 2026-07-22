@@ -89,3 +89,27 @@ def ensure_dimension(q: Quantity, expected: str, field_name: str = "") -> None:
             f"{label}次元が不正です。期待 {expected}({expected_dim})、"
             f"実際 {q.unit!r}({actual_dim})"
         )
+
+
+def ensure_angle(q: Quantity, field_name: str = "") -> None:
+    """角度単位(deg/rad系)であることを検証する。
+
+    Pintでは角度は無次元のため次元検証では判別できない。単位名で判定し、
+    素の無次元('1'等)を角度として受け取る事故を防ぐ(XROTOR/XFLR5入力用)。
+    """
+    normalized = str(_UREG.Unit(q.unit))
+    if "radian" not in normalized and "degree" not in normalized:
+        label = f"{field_name}: " if field_name else ""
+        raise UnitDimensionError(
+            f"{label}角度単位(deg/rad)が必要です(実際: {q.unit!r})"
+        )
+
+
+def ensure_inverse_angle(q: Quantity, field_name: str = "") -> None:
+    """角度の逆数単位(1/rad等。揚力傾斜)であることを検証する。"""
+    normalized = str(_UREG.Unit(q.unit))
+    if not ("/ radian" in normalized or "/ degree" in normalized):
+        label = f"{field_name}: " if field_name else ""
+        raise UnitDimensionError(
+            f"{label}角度の逆数単位(1/rad等)が必要です(実際: {q.unit!r})"
+        )

@@ -7,23 +7,36 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 import pbm
-from pbm.adapters.base import ExecutionMode, ResultStatus, SolverExecution
+from pbm.adapters.base import BinaryArtifact, ExecutionMode, ResultStatus, SolverExecution
+from pbm.adapters.xrotor import (
+    XROTOR_SUMMARY_PARSER_VERSION,
+    XROTORAdapter,
+    XrotorRunStatus,
+    parse_xrotor_summary,
+)
 from pbm.api.schemas import (
     AeroAnalysisRunOut,
     ApprovalOut,
     HealthOut,
     RequirementSpecOut,
     SizingRunSummary,
+    SolverRunOut,
     SparRunOut,
     StabilityRunOut,
     SweepRunOut,
     TransitionRequest,
     TransitionsOut,
     WingPlanformOut,
+    Xflr5HandoffOut,
+    Xflr5ImportRequest,
+    XrotorImportRequest,
+    XrotorRunRequest,
+    XrotorScriptOut,
 )
 from pbm.calculation.design_sweep import run_design_sweep
 from pbm.calculation.mass_properties import MassPropertiesOutput, compute_mass_properties
@@ -40,6 +53,13 @@ from pbm.domain.results import SizingRunResult
 from pbm.domain.stability import StabilityOutput, StabilityRequest
 from pbm.domain.states import DesignState
 from pbm.domain.structure import SparAnalysisOutput, SparAnalysisRequest
+from pbm.domain.xflr5_case import (
+    XFLR5_INPUT_GENERATOR_VERSION,
+    XFLR5_RESULT_PARSER_VERSION,
+    Xflr5Case,
+    parse_xflr5_result_table,
+)
+from pbm.domain.xrotor_case import XROTOR_GENERATOR_VERSION, XrotorCase
 from pbm.persistence import repository
 from pbm.reports.html_report import render_sizing_report
 from pbm.workflow.aero_service import build_aero_request, execute_aero_analysis
@@ -635,6 +655,208 @@ def list_design_sweeps(
 ) -> list[SweepRunOut]:
     runs = repository.list_analysis_runs(session, project_id, solver_name="pbm.design_sweep")
     return [_sweep_run_out(r) for r in runs]
+
+
+# --- XROTOR実連携・取込(Codex版から統合。T-203b) ---
+
+
+def _solver_run_out(row) -> SolverRunOut:  # noqa: ANN001
+    return SolverRunOut(
+        id=row.id,
+        project_id=row.project_id,
+        solver_name=row.solver_name,
+        input_hash=row.input_hash,
+        request=row.request,
+        outputs=row.outputs,
+        execution=SolverExecution.model_validate(row.execution),
+        created_at=datetime.fromisoformat(row.created_at),
+    )
+
+
+@router.post("/projects/{project_id}/xrotor-scripts", response_model=XrotorScriptOut)
+def generate_xrotor_script(
+    project_id: str, case: XrotorCase, session: Session = Depends(get_session)
+) -> XrotorScriptOut:
+    """XROTOR 7.55用入力スクリプトを生成する(入力準備。解析結果ではない)。"""
+    repository.get_project(session, project_id)
+    return XrotorScriptOut(
+        payload=case.normalized_payload(),
+        script=case.generate_script(),
+        generator_version=XROTOR_GENERATOR_VERSION,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/xrotor-runs", response_model=SolverRunOut, status_code=201
+)
+def run_xrotor_script(
+    project_id: str, request: XrotorRunRequest, session: Session = Depends(get_session)
+) -> SolverRunOut:
+    """XROTORをスクリプト実行する(real: 要PBM_XROTOR_PATH/VERSION、mock: 明示モック)。"""
+    repository.get_project(session, project_id)
+    adapter = XROTORAdapter()
+    script = request.case.generate_script()
+    result = adapter.run_script(script, execution_mode=request.execution_mode)
+    execution = SolverExecution(
+        solver_name="XROTOR",
+        solver_version=result.software_version,
+        execution_mode=result.execution_mode,
+        input_hash=compute_input_hash(request.case),
+        started_at=result.executed_at,
+        finished_at=datetime.now(UTC),
+        exit_code=result.exit_code,
+        stdout=result.stdout[:20000],
+        stderr=result.stderr[:20000],
+        parser_version=result.parser_version,
+        result_status=(
+            ResultStatus.ok
+            if result.run_status == XrotorRunStatus.completed
+            else ResultStatus.failed
+        ),
+    )
+    row = repository.save_analysis_run(
+        session,
+        project_id=project_id,
+        solver_name="XROTOR.script",
+        planform_revision=None,
+        requirement_revision=None,
+        request=request.case.normalized_payload(),
+        outputs=result.model_dump(mode="json"),
+        execution=execution,
+    )
+    return _solver_run_out(row)
+
+
+@router.get("/projects/{project_id}/xrotor-runs", response_model=list[SolverRunOut])
+def list_xrotor_runs(
+    project_id: str, session: Session = Depends(get_session)
+) -> list[SolverRunOut]:
+    runs = repository.list_analysis_runs(session, project_id, solver_name="XROTOR.script")
+    return [_solver_run_out(r) for r in runs]
+
+
+@router.post(
+    "/projects/{project_id}/xrotor-imports", response_model=SolverRunOut, status_code=201
+)
+def import_xrotor_summary(
+    project_id: str, request: XrotorImportRequest, session: Session = Depends(get_session)
+) -> SolverRunOut:
+    """手動実行したXROTORの公式サマリを取り込む。不完全なサマリは拒否する(CON-003)。"""
+    repository.get_project(session, project_id)
+    parsed = parse_xrotor_summary(request.summary_text)
+    if parsed is None:
+        raise RequestValidationError(
+            [{
+                "loc": ("body", "summary_text"),
+                "msg": (
+                    "XROTORサマリが不完全です(thrust/power/torque/Efficiency/"
+                    "speed/rpmのすべてが必要)。欠損値の補完は行いません"
+                ),
+                "type": "value_error",
+            }]
+        )
+    now = datetime.now(UTC)
+    execution = SolverExecution(
+        solver_name="XROTOR",
+        solver_version=f"imported({request.source_description[:100]})",
+        execution_mode=ExecutionMode.imported,
+        input_hash=compute_input_hash(request),
+        started_at=now,
+        finished_at=now,
+        parser_version=XROTOR_SUMMARY_PARSER_VERSION,
+        result_status=ResultStatus.ok,
+    )
+    raw_artifact = BinaryArtifact.from_bytes(
+        "xrotor-summary.txt", request.summary_text.encode("utf-8")
+    )
+    row = repository.save_analysis_run(
+        session,
+        project_id=project_id,
+        solver_name="XROTOR.import",
+        planform_revision=None,
+        requirement_revision=None,
+        request=request.model_dump(mode="json"),
+        outputs={
+            "summary": parsed,
+            "raw_text": raw_artifact.model_dump(mode="json"),
+            "derived_values_added": False,
+        },
+        execution=execution,
+    )
+    return _solver_run_out(row)
+
+
+@router.get("/projects/{project_id}/xrotor-imports", response_model=list[SolverRunOut])
+def list_xrotor_imports(
+    project_id: str, session: Session = Depends(get_session)
+) -> list[SolverRunOut]:
+    runs = repository.list_analysis_runs(session, project_id, solver_name="XROTOR.import")
+    return [_solver_run_out(r) for r in runs]
+
+
+# --- XFLR5ハンドオフ・取込(Codex版から統合。T-202b) ---
+
+
+@router.post("/projects/{project_id}/xflr5-handoffs", response_model=Xflr5HandoffOut)
+def create_xflr5_handoff(
+    project_id: str, case: Xflr5Case, session: Session = Depends(get_session)
+) -> Xflr5HandoffOut:
+    """XFLR5手動実行用の入力ZIPを作成する(入力準備。解析結果ではない)。"""
+    repository.get_project(session, project_id)
+    return Xflr5HandoffOut(
+        payload=case.normalized_payload(),
+        package=case.create_input_package(),
+        generator_version=XFLR5_INPUT_GENERATOR_VERSION,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/xflr5-imports", response_model=SolverRunOut, status_code=201
+)
+def import_xflr5_table(
+    project_id: str, request: Xflr5ImportRequest, session: Session = Depends(get_session)
+) -> SolverRunOut:
+    """XFLR5エクスポート表(alpha/CL/CD/Cm)を取り込む(execution_mode=imported)。"""
+    repository.get_project(session, project_id)
+    try:
+        table = parse_xflr5_result_table(request.raw_table_text)
+    except ValueError as error:
+        raise RequestValidationError(
+            [{"loc": ("body", "raw_table_text"), "msg": str(error), "type": "value_error"}]
+        ) from error
+    now = datetime.now(UTC)
+    execution = SolverExecution(
+        solver_name="XFLR5",
+        solver_version=f"imported({request.source_description[:100]})",
+        execution_mode=ExecutionMode.imported,
+        input_hash=compute_input_hash(request),
+        started_at=now,
+        finished_at=now,
+        parser_version=XFLR5_RESULT_PARSER_VERSION,
+        result_status=ResultStatus.ok,
+    )
+    raw_artifact = BinaryArtifact.from_bytes(
+        "xflr5-table.txt", request.raw_table_text.encode("utf-8")
+    )
+    row = repository.save_analysis_run(
+        session,
+        project_id=project_id,
+        solver_name="XFLR5.import",
+        planform_revision=None,
+        requirement_revision=None,
+        request=request.model_dump(mode="json"),
+        outputs={"table": table, "raw_text": raw_artifact.model_dump(mode="json")},
+        execution=execution,
+    )
+    return _solver_run_out(row)
+
+
+@router.get("/projects/{project_id}/xflr5-imports", response_model=list[SolverRunOut])
+def list_xflr5_imports(
+    project_id: str, session: Session = Depends(get_session)
+) -> list[SolverRunOut]:
+    runs = repository.list_analysis_runs(session, project_id, solver_name="XFLR5.import")
+    return [_solver_run_out(r) for r in runs]
 
 
 # --- 状態遷移・製造ガード ---

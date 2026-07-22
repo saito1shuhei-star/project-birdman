@@ -4,7 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from pbm.adapters.base import ExecutionMode, ResultStatus, SolverExecution
+from pbm.adapters.base import BinaryArtifact, ExecutionMode, ResultStatus, SolverExecution
 from pbm.domain.aero_analysis import AeroAnalysisOutput, AeroAnalysisRequest
 from pbm.domain.optimization import DesignSweepOutput, DesignSweepRequest
 from pbm.domain.planform import WingPlanformInput
@@ -13,6 +13,7 @@ from pbm.domain.requirements import RequirementSpecInput
 from pbm.domain.stability import StabilityOutput
 from pbm.domain.states import DesignState
 from pbm.domain.structure import SparAnalysisOutput, SparAnalysisRequest
+from pbm.domain.xrotor_case import XrotorCase
 
 
 class HealthOut(BaseModel):
@@ -58,6 +59,58 @@ class SweepRunOut(BaseModel):
     input_hash: str
     request: "DesignSweepRequest"
     outputs: "DesignSweepOutput"
+    execution: SolverExecution
+    created_at: datetime
+
+
+class XrotorScriptOut(BaseModel):
+    """XROTOR入力スクリプト生成の結果(入力準備であり解析結果ではない)。"""
+
+    payload: dict
+    script: str
+    generator_version: str
+
+
+class XrotorRunRequest(BaseModel):
+    """XROTOR実行リクエスト。realはPBM_XROTOR_PATH/VERSIONの設定が必要。"""
+
+    case: "XrotorCase"
+    execution_mode: ExecutionMode = ExecutionMode.mock
+
+
+class XrotorImportRequest(BaseModel):
+    """手動実行したXROTORの公式サマリテキストの取込(execution_mode=imported)。"""
+
+    summary_text: str = Field(min_length=1, max_length=200_000)
+    case_name: str | None = Field(default=None, max_length=100)
+    source_description: str = Field(min_length=1, max_length=500)  # どこで実行した結果か
+
+
+class Xflr5HandoffOut(BaseModel):
+    """XFLR5手動実行用の入力パッケージ(解析結果ではない)。"""
+
+    payload: dict
+    package: "BinaryArtifact"
+    generator_version: str
+
+
+class Xflr5ImportRequest(BaseModel):
+    """XFLR5エクスポート表(alpha/CL/CD/Cm)の取込(execution_mode=imported)。"""
+
+    raw_table_text: str = Field(min_length=1, max_length=2_000_000)
+    case_name: str | None = Field(default=None, max_length=100)
+    source_description: str = Field(min_length=1, max_length=500)
+
+
+class SolverRunOut(BaseModel):
+    """外部ソルバー実行・取込の汎用レスポンス(証跡つき)。"""
+
+    id: str
+    project_id: str
+    solver_name: str
+    input_hash: str
+    request: dict
+    outputs: dict
     execution: SolverExecution
     created_at: datetime
 

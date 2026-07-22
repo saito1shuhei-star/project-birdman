@@ -156,6 +156,19 @@ OpenAPIドキュメント: `/docs`(自動生成)。
 - `GET /api/projects/{id}/approvals` → 状態遷移の監査ログ(新しい順)。自動遷移(サイジング実行によるdraft→calculated等)は`actor=null`で記録される
 - POST /transition は従来どおり。成功した遷移はすべてapprovalsに記録される
 
+## XROTOR実連携・取込(Codex版から統合。T-203b)
+
+- `POST /api/projects/{id}/xrotor-scripts`(body: XrotorCase)→ 200 `{payload, script}`。XROTOR 7.55のARBI/AERO/OPER入力を生成(**入力準備であり解析結果ではない**)
+- `POST /api/projects/{id}/xrotor-runs`(body: `{case, execution_mode: mock|real}`)→ 201。realは要PBM_XROTOR_PATH/VERSION(未設定409)。入力・stdout/stderr・生成ファイルをBinaryArtifact(base64+SHA-256)で保存。プロセス失敗もresult_status=failedで記録
+- `POST /api/projects/{id}/xrotor-imports`(body: `{summary_text, source_description}`)→ 201(execution_mode=**imported**)。公式サマリ(thrust/power/torque/Efficiency/speed/rpm)が完全な場合のみ受理。**欠損値の補完はしない**(不完全は422)
+- `GET .../xrotor-runs` / `GET .../xrotor-imports`
+
+## XFLR5ハンドオフ・取込(Codex版から統合。T-202b)
+
+- `POST /api/projects/{id}/xflr5-handoffs`(body: Xflr5Case)→ 200 `{payload, package}`。手動実行用ZIP(manifest+README+airfoil.dat)。XFLR5はコマンド実行非対応(公式Ticket #57)のためGUI手動実行が正式経路
+- `POST /api/projects/{id}/xflr5-imports`(body: `{raw_table_text, source_description}`)→ 201(execution_mode=**imported**)。alpha/CL/CD/Cm列必須。派生値は追加しない(derived_values_added=false)
+- `GET .../xflr5-imports`
+
 ## 状態遷移(Phase 1はAPI最小限)
 
 `POST /api/projects/{project_id}/transition` → 200 / 409

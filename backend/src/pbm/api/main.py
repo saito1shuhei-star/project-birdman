@@ -20,6 +20,8 @@ from pbm.domain.errors import (
     InvalidTransitionError,
     MissingRequirementError,
     NotFoundError,
+    SolverNotImplementedError,
+    SolverUnavailableError,
 )
 from pbm.persistence.db import create_engine_and_sessionmaker
 
@@ -50,8 +52,13 @@ def create_app(database_url: str | None = None) -> FastAPI:
     @app.exception_handler(InvalidTransitionError)
     @app.exception_handler(ApprovalRequiredError)
     @app.exception_handler(MissingRequirementError)
+    @app.exception_handler(SolverUnavailableError)
     async def _conflict(_request: Request, exc: Exception) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(SolverNotImplementedError)
+    async def _not_implemented(_request: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(status_code=501, content={"detail": str(exc)})
 
     @app.exception_handler(CalculationError)
     async def _calc_error(_request: Request, exc: CalculationError) -> JSONResponse:

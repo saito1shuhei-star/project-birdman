@@ -40,9 +40,9 @@
 - [x] T-116 離陸条件・風速条件・パイロット年齢要件をRequirementSpecInputへ実装(2026-07-19。wind_speed_limit既定5m/s・flight_altitude_limit既定10m・pilot_age(任意、大会規則適合判定はしない)。現行の初期サイジング計算には未使用・記録とレポート表示のみ。テスト9件追加)
 - [x] T-201 Alembic導入(2026-07-19。backend/alembic/、ベースラインリビジョン8b9ce2ae4e20。db.pyのcreate_allは開発利便性のため継続、Phase2以降のスキーマ変更はマイグレーション経由に。スモークテスト追加)
 - [~] T-202 XFLR5アダプター mock先行分(2026-07-19。`pbm.adapters.xflr5.XFLR5Adapter`、`pbm.calculation.aero_mock_polar`(有限翼揚力線理論の近似ポーラ、数値回帰テスト付き)、`is_available()`でPBM_XFLR5_PATH検査。**real実行連携・API/UI結線・WingPlanform結合は未実装**(下記T-202b/T-203/T-204で継続)
-- [ ] T-202b XFLR5 real実行連携(実際のXFLR5起動・結果パース)。実機XFLR5での検証が必要 ← T-202
+- [x] T-202b XFLR5連携完成(2026-07-22、Codex版から統合。XFLR5はコマンド実行非対応(公式Ticket #57)のため、入力ZIPハンドオフ(POST /xflr5-handoffs)+GUI手動実行+結果表取込(POST /xflr5-imports、execution_mode=imported)を正式経路として実装。alpha/CL/CD/Cm必須・派生値追加なし)
 - [~] T-203 XROTORアダプター mock先行分(2026-07-19。`pbm.adapters.xrotor.XROTORAdapter`、`pbm.calculation.prop_mock_momentum`(運動量理論=理論上限、手計算リファレンスRC-P1・Froude恒等式・エネルギー収支テスト付き)。**real実行連携は未実装**(T-203b)
-- [ ] T-203b XROTOR real実行連携(実際のXROTOR起動・結果パース)。実機XROTORでの検証が必要 ← T-203
+- [x] T-203b XROTOR実連携(2026-07-22、Codex版から統合。XROTOR 7.55のARBI/AERO/OPERスクリプト生成(pbm/domain/xrotor_case.py)、隔離サブプロセス実行+全証跡保持(run_script)、公式サマリ取込(POST /xrotor-imports)。要PBM_XROTOR_PATH+PBM_XROTOR_VERSION。**実機XROTORでの実行検証は未実施**(実行ファイル設置後に要確認))
 - [x] T-204 WingPlanformモデルとUI、XFLR5解析のAPI/UI結線(2026-07-19。WingPlanform(台形積分・手計算検証付き)、wing_planforms/analysis_runsテーブル+マイグレーション、PUT/GET planform・POST aero-analyses API(mock固定・状態calculated→analyzed遷移)、フロントエンドStep4/5セクション(平面形エディタ・導出量・ポーラ表・モック明示)。実ブラウザE2E確認済み。**過程でCategory enum変更のデータ移行漏れによる500エラーを発見し、データ移行`9706411a806d`+回帰テストで修正**)
 - [ ] T-205 解析ジョブ管理(非同期化)
 - [x] T-206 Playwright導入(2026-07-19。@playwright/test+chromium、playwright.config.tsでbackend(uvicorn・一時DB)+frontend(next start)を自動起動、ゴールデンパスE2E(プロジェクト→要求→サイジング→平面形→空力→質量台帳→静安定→梁解析)合格。CIにe2eジョブ追加。T-108も完了)
@@ -55,3 +55,15 @@
 - [~] T-401 最適化基盤MVP(2026-07-19。設計変数(翼幅/巡航速度/CL)のグリッドスイープ、violation警告=不可行の制約判定、必要出力最小×L/D最大の2目的パレート抽出、API+UI。**最適解の自動採用はしない**。SciPyによる連続最適化・感度分析・不確かさ分析は未実装 → T-402)
 - [ ] T-402 連続最適化(SciPy)・感度分析・不確かさ分析(モンテカルロ)← T-401
 - [ ] T-501 CADパラメータ出力(approvedガード連動)/ T-502 PDF・CSVレポート
+
+## Codex版PBMの統合(docs/INTEGRATION_PLAN.md参照。統合元パスは同計画書に記載)
+
+- [ ] T-510 質量台帳の変更履歴+target種別(統合元: mass_properties_persistence.py)— 優先度高
+- [ ] T-511 気象アダプター(Open-Meteo/NASA POWER/NOAA/気象庁アメダス)+観測地点選択(external_data.py, weather_sites.py)— 優先度高
+- [ ] T-512 フライト条件判断の記録(風速の瞬間値/時間平均区別、チーム判断と実行委員会決定の分離)(flight_conditions.py)— 優先度高
+- [ ] T-513 大会運用一式(規則チェックリスト・役割・機体チェック履歴・提出物版管理・当日指示・禁止区域地図・規則原本版管理)(api.py)— 優先度高
+- [ ] T-514 認証(利用者ID+秘密鍵)・ロール・全操作履歴(auth.py, roles.py)— Web公開の前提
+- [ ] T-515 機体ジオメトリ一元管理(胴体・尾翼・プロペラ、履歴付き)(aircraft_geometry.py)
+- [ ] T-516 Fusionハンドオフ(CSV/ZIP+人による確認記録。**FR-004: approvedのみ**)(fusion_handoff.py)
+- [ ] T-517 XROTOR設計点比較画面(xrotor_comparison*.py)
+- [ ] T-518 Excel解析テンプレート出力(excel_adapter.py)

@@ -30,6 +30,30 @@ class ResultStatus(StrEnum):
     partial = "partial"
 
 
+class BinaryArtifact(BaseModel):
+    """外部ソフトの入出力ファイルの正確な保存(base64+SHA-256)。
+
+    Codex版PBM(commit 6a9e400)からの移植。中身は解釈せず証跡として保持する。
+    """
+
+    filename: str
+    content_base64: str
+    size_bytes: int
+    sha256: str
+
+    @classmethod
+    def from_bytes(cls, filename: str, content: bytes) -> BinaryArtifact:
+        import base64
+        import hashlib
+
+        return cls(
+            filename=filename,
+            content_base64=base64.b64encode(content).decode("ascii"),
+            size_bytes=len(content),
+            sha256=hashlib.sha256(content).hexdigest(),
+        )
+
+
 class SolverExecution(BaseModel):
     """すべての解析・計算実行に付与する実行メタデータ(FR-024, FR-042)。"""
 

@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [Unreleased] - 2026-07-22(Codex版PBMの統合 第1弾)
+
+### Added — XROTOR実連携・XFLR5ハンドオフ(Codex版 commit 6a9e400 から統合)
+
+- 統合方針を決定: **GitHub版(本リポジトリ)を本流**とし、Codex版の機能を段階統合([docs/INTEGRATION_PLAN.md](docs/INTEGRATION_PLAN.md)。データ移行は不要=Codex版に実データ0件を確認)
+- **XROTOR 7.55実連携**: 単位付き構造化ケース(ARBI任意形状+AERO 13係数+運転点)からのスクリプト生成、隔離サブプロセス実行(シェル不使用・パス脱出検証・タイムアウト)、入力/stdout/stderr/生成ファイルの全証跡保存(BinaryArtifact: base64+SHA-256)、公式サマリ取込(不完全なら拒否=捏造しない)。API: /xrotor-scripts, /xrotor-runs, /xrotor-imports。環境変数PBM_XROTOR_VERSIONを追加
+- **XFLR5ハンドオフ**: コマンド実行非対応(公式Ticket #57)を踏まえ、入力ZIP(manifest+README+翼型座標、「解析結果ではない」明示)→GUI手動実行→結果表取込(alpha/CL/CD/Cm必須、execution_mode=imported、派生値追加なし)を正式経路として実装。API: /xflr5-handoffs, /xflr5-imports
+- 角度単位検証(ensure_angle/ensure_inverse_angle)をquantitiesへ追加(pintでは角度が無次元のため単位名で判定)
+- SolverUnavailableError→409 / SolverNotImplementedError→501 のAPIハンドラを追加
+- [docs/REFERENCES.md](docs/REFERENCES.md): 気象API・XROTOR/XFLR5/Fusion・NIST等の情報源一覧を統合
+- 残りの統合対象(気象・認証・大会運用・ジオメトリ・Fusion等)をT-510〜T-518として登録
+- テスト34件追加(スクリプト生成のSI変換手計算検証・サマリ/表パーサ・API統合。計266件)
+
 ## [Unreleased] - 2026-07-19(T-304・レポート統合・梁拡張・T-401)
 
 ### Added — T-304 承認ワークフロー+監査ログ

@@ -142,3 +142,195 @@ a {
   font-size: 0.85rem;
   color: #555;
 }
+
+/* --- 案A+Bハイブリッドのシェル --- */
+
+.shell {
+  margin: -1.5rem;
+}
+
+.shell-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 2rem;
+  padding: 0.8rem 1.5rem;
+  background: #123f4d;
+  color: #fff;
+}
+
+.shell-header a {
+  color: #bcdde6;
+  font-size: 0.85rem;
+}
+
+.shell-title h1 {
+  border: none;
+  margin: 0.1rem 0;
+  padding: 0;
+  font-size: 1.3rem;
+  color: #fff;
+}
+
+.shell-title .note {
+  color: #bcdde6;
+}
+
+.shell-kpis {
+  display: flex;
+  gap: 1.2rem;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.kpi small {
+  display: block;
+  font-size: 0.7rem;
+  color: #9fc6d0;
+}
+
+.kpi strong {
+  font-size: 1rem;
+}
+
+.kpi-bad {
+  color: #ffb3ab;
+}
+
+.kpi-good {
+  color: #b5e6c8;
+}
+
+.shell-body {
+  display: flex;
+  min-height: 70vh;
+  align-items: stretch;
+}
+
+.stepper {
+  width: 13.5rem;
+  flex-shrink: 0;
+  border-right: 1px solid #d7dee5;
+  background: #fff;
+  padding: 0.6rem 0;
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.9rem;
+  color: #33424c;
+  text-decoration: none;
+  font-size: 0.9rem;
+  border-left: 3px solid transparent;
+}
+
+.step:hover {
+  background: #f0f5f8;
+}
+
+.step-active {
+  background: #e5f0f4;
+  border-left-color: #16537e;
+  font-weight: 600;
+}
+
+.step-no {
+  width: 1.4rem;
+  text-align: center;
+  color: #16537e;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.step-label small {
+  display: block;
+  font-size: 0.7rem;
+  color: #8195a1;
+  font-weight: 400;
+}
+
+.step-flag {
+  margin-left: auto;
+  font-size: 0.72rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 1rem;
+  font-weight: 600;
+}
+
+.step-flag-bad {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.step-flag-warn {
+  background: #fff3cd;
+  color: #7a5b00;
+}
+
+.shell-content {
+  flex: 1;
+  min-width: 0;
+  padding: 1rem 1.8rem 3rem;
+}
+
+.shell-content h2:first-child {
+  margin-top: 0.5rem;
+}
+
+/* --- 概要ダッシュボード(案B) --- */
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.8rem;
+  margin: 1rem 0;
+}
+
+.kpi-card {
+  background: #fff;
+  border: 1px solid #d7dee5;
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+}
+
+.kpi-card small {
+  display: block;
+  font-size: 0.75rem;
+  color: #667;
+}
+
+.kpi-card strong {
+  font-size: 1.25rem;
+}
+
+.kpi-card .kpi-bad {
+  color: #a12622;
+}
+
+.next-action {
+  border-left: 5px solid #16537e;
+  border-radius: 0 8px 8px 0;
+}
+
+@media (max-width: 900px) {
+  .shell-body {
+    flex-direction: column;
+  }
+  .stepper {
+    width: 100%;
+    display: flex;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid #d7dee5;
+  }
+  .step {
+    border-left: none;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+  }
+  .step-active {
+    border-bottom-color: #16537e;
+  }
+}
